@@ -10,7 +10,7 @@
 
 仓库：https://github.com/dylanmiao7/SyCare
 
-当前为开发准备包，尚未建立可运行前后端。学生用GitHub Desktop克隆并接受协作邀请。没有package.json时不要执行npm启动命令。
+当前为开发准备包，尚未建立可运行前后端。学生接受协作邀请后，可用熟悉的 coding 工具克隆仓库；没有package.json时不要执行npm启动命令。
 
 建议架构：React/Vite中文前端、Supabase登录/数据库/私有文件/Edge Functions、DeepSeek后端问答。真实key与真实健康资料不上传公开仓库。
 
