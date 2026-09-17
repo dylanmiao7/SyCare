@@ -15,5 +15,3 @@
 建议先演示 `SYN-001`（血压趋势）、`SYN-003`（睡眠与交流需求、上传PDF）、`SYN-006`（享受独处、不愿自动分享），再看全部12人。日期为2026年8月1日至30日。心情字段不是心理量表，病历未经临床审核。分享偏好只是数据，正式应用仍需登录授权与数据库访问规则。
 
 CSV为UTF-8 BOM，Excel可直接打开。每行 `is_synthetic=True`。无真实姓名、地址、医院或用药处方。
-
-重新生成需要安装 `reportlab`，在项目根目录运行 `python scripts/build_demo_cn.py`；核对运行 `python scripts/check_demo_cn.py`（需 `pdftotext`）。重新生成会覆盖三张表和测试PDF。
