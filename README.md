@@ -19,7 +19,7 @@
 
 ## 数据与验证
 
-data/demo_cn仅含虚构中文数据：12位老人、360条健康记录、360条关怀记录、24条病历、24条消息、3份PDF与3份小结草稿。
+data/demo_cn只有三张数据表：12位老人、360条合并健康与关怀的每日记录、24条病历；另有一份上传测试PDF。三张表用patient_id关联。
 
 ```bash
 python scripts/build_demo_cn.py

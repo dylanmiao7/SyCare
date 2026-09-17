@@ -1,26 +1,19 @@
-# 国内场景中文模拟数据
+# 中文模拟数据：只看三张表
 
-适配五个入口：问一问、记健康、存病历、复诊小结、关怀记录。
+保留原有规模：12位虚构老人、每人30天记录、每人2条病历。只有下面三张CSV表，它们用 `patient_id` 关联；另有一份供上传测试的[中文病历PDF](sample_pdfs/SYN-003_模拟病历.pdf)。所有内容都是模拟的。
 
-| 文件 | 数量 | 用途 |
-|---|---:|---|
-| patients.csv | 12人 | 档案、居住情况、分享偏好 |
-| health_logs.csv | 360条 | 每人30天血压和脉搏，区分本人/家属代录 |
-| wellbeing_logs.csv | 360条 | 睡眠、心情、是否想交流，可跳过 |
-| medical_records.csv | 24条 | 每人建档和随访各1条 |
-| chat_messages.csv | 24条 | 每人一问一答，有来源病历编号 |
-| visit_summary_examples.json | 3份 | 待用户确认的小结示例 |
-| sample_pdfs/ | 3份 | 中文文字PDF，供上传和来源核对 |
-| dataset.json | 同上5张表 | 保留数值、布尔值和null类型 |
+| 表 | 行数 | 什么时候用 | 关键字段 |
+|---|---:|---|---|
+| [patients.csv](patients.csv) | 12 | 显示老人档案，查看居住和分享偏好 | `patient_id`、`display_name`、`age_years`、`sharing_preference` |
+| [daily_checkins.csv](daily_checkins.csv) | 360 | 同一张表支持“记健康”和“记心情”；每人每天一行 | `patient_id`、`record_date`、血压、脉搏、睡眠、心情、交流意愿 |
+| [medical_records.csv](medical_records.csv) | 24 | 病历收纳、复诊小结和问答引用；每人建档与随访各一条 | `record_id`、`patient_id`、`record_date`、`record_text` |
 
-日期为2026-08-01至30日，对话为8月31日，时区Asia/Shanghai。CSV为UTF-8 BOM；空单元格是缺失，JSON为null，0是有效值。所有行is_synthetic=true。
+**怎么连起来？** 先在 `patients.csv` 找到 `SYN-003`，再用同一个 `patient_id` 筛选 `daily_checkins.csv` 和 `medical_records.csv`。问“最近睡得怎么样”时读每日表；问“病历里写了什么”时读病历表。复诊小结从这两张表临时生成草稿，聊天记录由应用在真实使用时保存，因此不再预放聊天表和小结表。
 
-先用SYN-001（血压趋势）、SYN-003（希望交流）、SYN-006（享受独处且不分享）三人，再扩展到12人。SYN-002含连续缺失，SYN-005在8月21日有174/96的设定读数。
+**如何处理空白？** 每日表的 `systolic_mmhg`、`diastolic_mmhg`、`pulse_bpm` 同时为空时，查看 `capture_status` 是 `not_recorded`（未记录）还是 `device_error`（设备错误）。不要当作0。`mood_response` 的“跳过”是本人没有回答；不是心情不好。`wants_to_talk` 只是交流意愿，不代表已经通知家属。`recorded_by_type` 是模拟的本人/家属标签，正式应用须记录真实登录用户。
 
-所有人物数值均为教学设定，未拟合真实分布。心情选项不是心理量表。病历与聊天未经临床专家审阅，不能作为医疗标准答案。PDF为文字版，不代表扫描件OCR已测试。
+建议先演示 `SYN-001`（血压趋势）、`SYN-003`（睡眠与交流需求、上传PDF）、`SYN-006`（享受独处、不愿自动分享），再看全部12人。日期为2026年8月1日至30日。心情字段不是心理量表，病历未经临床审核。分享偏好只是数据，正式应用仍需登录授权与数据库访问规则。
 
-没有真实地址、医院、挂号、用药提醒或美国调查数据。技术字段保留英文，面向用户的内容使用中文。
+CSV为UTF-8 BOM，Excel可直接打开。每行 `is_synthetic=True`。无真实姓名、地址、医院或用药处方。
 
-sharing_preference是偏好，不是数据库权限。Supabase导入前需建立Auth用户、老人授权关系、RLS和私有文件规则。不能将12人直接公开给所有登录用户。recorded_by_type是演示标签，真实系统须另存实际录入用户ID。
-
-字段定义见[数据字典](DATA_DICTIONARY.md)。重新生成：项目根目录执行 `python scripts/build_demo_cn.py`（需要reportlab）。核对：`python scripts/check_demo_cn.py`（需要pdftotext）。会覆盖生成文件，先保存个人修改。
+重新生成需要安装 `reportlab`，在项目根目录运行 `python scripts/build_demo_cn.py`；核对运行 `python scripts/check_demo_cn.py`（需 `pdftotext`）。重新生成会覆盖三张表和测试PDF。
