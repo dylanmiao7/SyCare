@@ -1,0 +1,86 @@
+/* ============================================================
+   SyCare · design tokens
+   本文件必须与 design/02_设计规范与design-tokens.md 保持一致。
+   所有对比度为实测值，改动颜色前请重新测量。
+   ============================================================ */
+
+:root {
+  /* ---------- 字号（根字号可被「设置」页切换） ---------- */
+  --fs-root: 20px;
+  --fs-hero: 2rem;      /* 40px  首页问候 */
+  --fs-h1: 1.75rem;     /* 35px  页面大标题 */
+  --fs-h2: 1.4rem;      /* 28px  区块标题 */
+  --fs-h3: 1.2rem;      /* 24px  卡片标题 */
+  --fs-lg: 1.15rem;     /* 23px  数值显示 */
+  --fs-body: 1rem;      /* 20px  正文最小值 */
+  --fs-sm: .9rem;       /* 18px  次要说明 */
+  --fs-xs: .8rem;       /* 16px  仅限徽标内文字 */
+
+  --lh-tight: 1.35;
+  --lh-body: 1.7;
+  --lh-badge: 1.2;
+
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-bold: 600;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC",
+               "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+               "Source Han Sans SC", system-ui, sans-serif;
+
+  /* ---------- 颜色 ---------- */
+  --c-bg: #F5F6F4;
+  --c-surface: #FFFFFF;
+  --c-ink: #111827;
+  --c-ink-muted: #4B5563;
+  --c-ink-subtle: #6B7280;
+  --c-primary: #14509B;
+  --c-primary-hover: #0F3C74;
+  --c-border: #6B7280;
+  --c-border-soft: #D1D5DB;
+
+  /* 状态色：文字 / 底色（对比度见 02 文档实测表） */
+  --c-ok-fg: #0F5132;      --c-ok-bg: #DCF2E4;
+  --c-warn-fg: #8A5300;    --c-warn-bg: #FFF8E1;
+  --c-danger-fg: #B3261E;  --c-danger-bg: #FDECEA;
+  --c-neutral-fg: #4B5563; --c-neutral-bg: #F3F4F6;
+  --c-info-bg: #E7F0FB;
+
+  /* 图表 */
+  --c-chart-bp: #14509B;
+  --c-chart-pulse: #6B7280;
+  --c-chart-sleep: #0F5132;
+  --c-chart-grid: rgba(107, 114, 128, .3);
+  --c-chart-band-fill: #FFF8E1;
+  --c-chart-band-stroke: #8A5300;
+  --c-chart-threshold: #B3261E;
+
+  /* ---------- 间距 ---------- */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px; --sp-12: 48px;
+
+  /* ---------- 圆角与阴影 ---------- */
+  --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(17, 24, 39, .06);
+  --shadow-raise: 0 2px 8px rgba(17, 24, 39, .10);
+
+  /* ---------- 触控尺寸（最小不得低于 48px） ---------- */
+  --tap-hero: 96px;
+  --tap-primary: 64px;
+  --tap-secondary: 56px;
+  --tap-input: 60px;
+  --tap-mood: 72px;
+
+  /* ---------- 布局 ---------- */
+  --content-max: 720px;
+  --page-pad: 20px;
+}
+
+/* 字号档位：只改根字号，全站等比放大 */
+:root[data-font="small"]  { --fs-root: 18px; }
+:root[data-font="normal"] { --fs-root: 20px; }
+:root[data-font="large"]  { --fs-root: 24px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}

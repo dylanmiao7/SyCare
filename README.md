@@ -14,6 +14,24 @@
 
 建议架构：React/Vite中文前端、Supabase登录/数据库/私有文件/Edge Functions、DeepSeek后端问答。真实key与真实健康资料不上传公开仓库。
 
+## 前端设计（老人本人视角）
+
+`design/` 中已有一套完整的前端设计：8 个页面的逐页规格、实测对比度的大字设计规范、组件与文案库、
+缺失值语义规则，以及一个**零依赖、可直接点击的高保真原型**（真实读取 `data/` 中的模拟数据）。
+
+- 索引与设计底线：[design/README.md](design/README.md)
+- 原型与 6 分钟课堂演示脚本：[design/prototype/README.md](design/prototype/README.md)
+- 验收标准逐条对照：[design/06_无障碍与验收对照.md](design/06_无障碍与验收对照.md)
+
+原型不需要 npm 安装，起一个静态服务即可打开：
+
+```bash
+cd SyCare && python3 -m http.server 8777
+# 访问 http://127.0.0.1:8777/design/prototype/
+```
+
+该设计**不含**登录、多家庭权限、云端存储与真实 DeepSeek 调用；这些仍按上面的建议架构在开发阶段实现。
+
 ## 模拟数据
 
 data文件夹只有三张数据表：12位老人、360条合并健康与关怀的每日记录、24条病历；`data/测试数据/` 中有三份对应不同老人的上传测试PDF。三张表用patient_id关联。
