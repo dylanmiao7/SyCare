@@ -37,6 +37,18 @@ function dateLabel(value) {
     : new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(date)
 }
 
+function displayPatientName(value) {
+  return (value || '').replace(/^模拟\s*/, '') || '长辈'
+}
+
+function displayRecordText(value) {
+  return (value || '').replace(/【完全模拟病历】/g, '').trim()
+}
+
+function displayRecordSource(value) {
+  return (value || '').replace(/中文教学模拟文本/g, '病历资料')
+}
+
 function nullableNumber(value) {
   if (value === '' || value === null || value === undefined) return null
   const number = Number(value)
@@ -183,7 +195,7 @@ function App() {
       patient_id: patient.patient_id,
       record_date: recordForm.record_date,
       record_type: recordForm.record_type,
-      source_label: '课堂演示输入',
+      source_label: '手动录入',
       record_text: recordForm.record_text.trim(),
       text_status: 'confirmed_demo',
       file_path: null,
@@ -228,23 +240,23 @@ function App() {
         <div className="sidebar-spacer" />
         <div className="sidebar-note">
           <span className="note-icon">✦</span>
-          <strong>演示资料</strong>
-          <p>当前连接的是模拟数据。请勿填写真实姓名、病历或健康信息。</p>
+          <strong>课堂体验</strong>
+          <p>当前展示的是示例资料，仅供体验。请勿填写真实姓名、病历或健康信息。</p>
         </div>
-        <div className="sidebar-footer"><span className="status-dot" />数据库已连接 <span className="version">DEMO</span></div>
+        <div className="sidebar-footer"><span className="status-dot" />数据已连接 <span className="version">体验版</span></div>
       </aside>
 
       <main className="main-area">
         <header className="topbar">
           <div className="breadcrumb"><span>SyCare</span><span className="crumb-divider">/</span><strong>{navLabel}</strong></div>
           <div className="topbar-actions">
-            <span className="demo-badge"><span>●</span> 模拟数据演示</span>
+            <span className="demo-badge"><span>●</span> 课堂体验</span>
             <label className="patient-picker">
               <span className="sr-only">选择长辈</span>
               <span className="avatar">{patient?.display_name?.slice(-1) || '长'}</span>
               <select value={patientId} onChange={(event) => setPatientId(event.target.value)} disabled={!patients.length}>
                 {patients.length === 0 && <option value="">暂无档案</option>}
-                {patients.map((item) => <option key={item.patient_id} value={item.patient_id}>{item.display_name}</option>)}
+                {patients.map((item) => <option key={item.patient_id} value={item.patient_id}>{displayPatientName(item.display_name)}</option>)}
               </select>
               <span className="chevron">⌄</span>
             </label>
@@ -264,7 +276,7 @@ function App() {
               {section === 'ask' && <AskPage patient={patient} question={question} setQuestion={setQuestion} onSubmit={askQuestion} answer={answer} />}
             </>
           )}
-          <footer className="page-footer"><span>SyCare 演示版</span><span>记录帮助日常沟通，不用于诊断或治疗决策。</span></footer>
+          <footer className="page-footer"><span>SyCare · 体验版</span><span>记录帮助日常沟通，不用于诊断或治疗决策。</span></footer>
         </div>
       </main>
     </div>
@@ -292,10 +304,10 @@ function HomePage({ patient, checkins, records, loading, onNavigate }) {
   const conversationDays = recent.filter((row) => row.wants_to_talk === '愿意').length
   return (
     <>
-      <PageHeading eyebrow="长辈档案" title={`早上好，${patient.display_name}`} description="把每天的小记录整理好，复诊时更容易说清楚。" action={<button className="button button-soft" onClick={() => onNavigate('health')}>＋ 记一条健康记录</button>} />
+      <PageHeading eyebrow="长辈档案" title={`早上好，${displayPatientName(patient.display_name)}`} description="把每天的小记录整理好，复诊时更容易说清楚。" action={<button className="button button-soft" onClick={() => onNavigate('health')}>＋ 记一条健康记录</button>} />
       <div className="profile-strip">
         <div className="profile-avatar">{patient.display_name?.slice(-1) || '长'}</div>
-        <div className="profile-main"><strong>{patient.display_name}</strong><span>{patient.age_years ? `${patient.age_years} 岁` : '年龄未记录'}{patient.gender && patient.gender !== '未说明' ? ` · ${patient.gender}` : ''} · 编号 {patient.patient_id}</span></div>
+        <div className="profile-main"><strong>{displayPatientName(patient.display_name)}</strong><span>{patient.age_years ? `${patient.age_years} 岁` : '年龄未记录'}{patient.gender && patient.gender !== '未说明' ? ` · ${patient.gender}` : ''} · 编号 {patient.patient_id}</span></div>
         <div className="profile-meta"><span className="meta-label">居住情况</span><strong>{patient.living_arrangement || '未记录'}</strong></div>
         <div className="profile-meta"><span className="meta-label">分享偏好</span><strong>{patient.sharing_preference || '未记录'}</strong></div>
       </div>
@@ -323,7 +335,7 @@ function HomePage({ patient, checkins, records, loading, onNavigate }) {
         </section>
       </div>
       <div className="home-bottom-grid">
-        <section className="panel"><div className="panel-heading"><div><h2>档案摘要</h2><p>来自本人或家属的模拟资料</p></div></div><p className="summary-copy">{patient.history_summary || '还没有补充既往情况。'}</p><div className="detail-pair"><span>过敏情况</span><strong>{patient.allergy_status || '未记录'}</strong></div><div className="detail-pair"><span>支持对象</span><strong>{patient.support_person || '未指定'}</strong></div></section>
+        <section className="panel"><div className="panel-heading"><div><h2>档案摘要</h2><p>本人或家属提供的信息</p></div></div><p className="summary-copy">{patient.history_summary || '还没有补充既往情况。'}</p><div className="detail-pair"><span>过敏情况</span><strong>{patient.allergy_status || '未记录'}</strong></div><div className="detail-pair"><span>支持对象</span><strong>{patient.support_person || '未指定'}</strong></div></section>
         <section className="panel visit-card"><div className="visit-badge">复</div><div><h2>准备下一次复诊</h2><p>把最近记录整理成一份可修改的小结草稿。</p><button className="button button-outline" onClick={() => onNavigate('summary')}>开始整理 <span>→</span></button></div></section>
       </div>
     </>
@@ -354,17 +366,17 @@ function InlineEmpty({ text }) { return <div className="inline-empty">{text}</di
 
 function HealthPage({ patient, checkins, loading, showForm, setShowForm, form, setForm, onSubmit, saving }) {
   return <>
-    <PageHeading eyebrow="日常记录" title="健康记录" description={`记录 ${patient.display_name} 的血压、脉搏、睡眠和心情。空白表示未填写。`} action={<button className="button button-primary" onClick={() => setShowForm(!showForm)}>{showForm ? '收起表单' : '＋ 新增记录'}</button>} />
+    <PageHeading eyebrow="日常记录" title="健康记录" description={`记录 ${displayPatientName(patient.display_name)} 的血压、脉搏、睡眠和心情。空白表示未填写。`} action={<button className="button button-primary" onClick={() => setShowForm(!showForm)}>{showForm ? '收起表单' : '＋ 新增记录'}</button>} />
     {showForm && <CheckinForm form={form} setForm={setForm} onSubmit={onSubmit} saving={saving} />}
     <section className="panel data-panel"><div className="panel-heading"><div><h2>每日记录</h2><p>共 {checkins.length} 条 · 按日期从新到旧</p></div><span className="subtle-tag">{loading ? '正在更新…' : `${checkins.length} 条记录`}</span></div>
-      {checkins.length ? <div className="table-scroll"><table className="data-table"><thead><tr><th>日期</th><th>血压</th><th>脉搏</th><th>睡眠</th><th>心情</th><th>记录人</th><th>状态</th></tr></thead><tbody>{checkins.map((row) => <tr key={row.checkin_id}><td><strong>{dateLabel(row.record_date)}</strong></td><td>{row.systolic_mmhg == null || row.diastolic_mmhg == null ? <span className="muted">未记录</span> : `${row.systolic_mmhg} / ${row.diastolic_mmhg} mmHg`}</td><td>{row.pulse_bpm == null ? '—' : `${row.pulse_bpm} 次/分`}</td><td>{row.sleep_hours == null ? '—' : `${row.sleep_hours} 小时`}</td><td><MoodBadge value={row.mood_response} /></td><td>{row.recorded_by_type === 'family' ? '家属' : '本人'}</td><td><CaptureBadge value={row.capture_status} /></td></tr>)}</tbody></table></div> : <InlineEmpty text="还没有健康记录。可以从上方新增一条模拟记录。" />}
+      {checkins.length ? <div className="table-scroll"><table className="data-table"><thead><tr><th>日期</th><th>血压</th><th>脉搏</th><th>睡眠</th><th>心情</th><th>记录人</th><th>状态</th></tr></thead><tbody>{checkins.map((row) => <tr key={row.checkin_id}><td><strong>{dateLabel(row.record_date)}</strong></td><td>{row.systolic_mmhg == null || row.diastolic_mmhg == null ? <span className="muted">未记录</span> : `${row.systolic_mmhg} / ${row.diastolic_mmhg} mmHg`}</td><td>{row.pulse_bpm == null ? '—' : `${row.pulse_bpm} 次/分`}</td><td>{row.sleep_hours == null ? '—' : `${row.sleep_hours} 小时`}</td><td><MoodBadge value={row.mood_response} /></td><td>{row.recorded_by_type === 'family' ? '家属' : '本人'}</td><td><CaptureBadge value={row.capture_status} /></td></tr>)}</tbody></table></div> : <InlineEmpty text="还没有每日记录。可以从上方新增一条。" />}
     </section>
   </>
 }
 
 function CheckinForm({ form, setForm, onSubmit, saving }) {
   const change = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }))
-  return <form className="panel form-panel" onSubmit={onSubmit}><div className="panel-heading"><div><h2>新增每日记录</h2><p>请使用虚构信息进行课堂演示。</p></div><span className="form-step">今日记录</span></div>
+  return <form className="panel form-panel" onSubmit={onSubmit}><div className="panel-heading"><div><h2>新增每日记录</h2><p>空白项目可以留空，按实际情况记录。</p></div><span className="form-step">今日记录</span></div>
     <div className="form-grid"><label className="field"><span>记录日期</span><input type="date" value={form.record_date} onChange={change('record_date')} required /></label><label className="field"><span>记录状态</span><select value={form.capture_status} onChange={change('capture_status')}><option value="recorded">已记录</option><option value="not_recorded">未记录</option><option value="device_error">设备错误</option></select></label><label className="field"><span>收缩压 <small>mmHg</small></span><input type="number" min="50" max="280" placeholder="例如 128" value={form.systolic_mmhg} onChange={change('systolic_mmhg')} /></label><label className="field"><span>舒张压 <small>mmHg</small></span><input type="number" min="20" max="180" placeholder="例如 78" value={form.diastolic_mmhg} onChange={change('diastolic_mmhg')} /></label><label className="field"><span>脉搏 <small>次/分</small></span><input type="number" min="20" max="250" placeholder="选填" value={form.pulse_bpm} onChange={change('pulse_bpm')} /></label><label className="field"><span>睡眠 <small>小时</small></span><input type="number" min="0" max="24" step="0.1" placeholder="选填" value={form.sleep_hours} onChange={change('sleep_hours')} /></label><label className="field"><span>心情</span><select value={form.mood_response} onChange={change('mood_response')}><option value="">跳过此项</option><option>很好</option><option>一般</option><option>不太好</option><option>跳过</option></select></label><label className="field"><span>是否想找人聊聊</span><select value={form.wants_to_talk} onChange={change('wants_to_talk')}><option value="">跳过此项</option><option>愿意</option><option>暂时不需要</option><option>跳过</option></select></label><label className="field"><span>由谁记录</span><select value={form.recorded_by_type} onChange={change('recorded_by_type')}><option value="self">本人</option><option value="family">家属</option></select></label><label className="field field-wide"><span>补充说明 <small>选填</small></span><textarea rows="3" maxLength="500" placeholder="写下希望复诊时记住的情况" value={form.self_report_note} onChange={change('self_report_note')} /></label></div>
     <div className="form-actions"><span>空白读数会保留为空，不会自动填成 0。</span><button className="button button-primary" type="submit" disabled={saving}>{saving ? '正在保存…' : '保存记录'}</button></div>
   </form>
@@ -373,7 +385,7 @@ function CheckinForm({ form, setForm, onSubmit, saving }) {
 function CarePage({ patient, checkins }) {
   const notes = checkins.filter((row) => row.self_report_note || row.wants_to_talk || row.mood_response)
   return <>
-    <PageHeading eyebrow="日常陪伴" title="关怀记录" description={`查看 ${patient.display_name} 留下的心情、交流意愿和补充说明。`} action={<span className="subtle-tag">交流意愿不代表已通知家人</span>} />
+    <PageHeading eyebrow="日常陪伴" title="关怀记录" description={`查看 ${displayPatientName(patient.display_name)} 留下的心情、交流意愿和补充说明。`} action={<span className="subtle-tag">交流意愿不代表已通知家人</span>} />
     <section className="panel care-panel"><div className="panel-heading"><div><h2>关怀时间线</h2><p>来自每日记录，可随时回到健康记录中补充。</p></div><span className="subtle-tag">{notes.length} 条</span></div>
       {notes.length ? <div className="care-timeline">{notes.map((row) => <article className="timeline-card" key={row.checkin_id}><div className="timeline-date"><strong>{new Date(`${row.record_date}T00:00:00`).getDate()}</strong><span>{shortDate(row.record_date)}</span></div><div className="timeline-line" /><div className="timeline-content"><div className="timeline-head"><span className={`mood-pill ${row.wants_to_talk === '愿意' ? 'talk-pill' : ''}`}>{row.wants_to_talk === '愿意' ? '♡ 想找人聊聊' : row.mood_response && row.mood_response !== '跳过' ? `心情 · ${row.mood_response}` : '日常记录'}</span><span className="timeline-by">{row.recorded_by_type === 'family' ? '家属代录' : '本人记录'}</span></div><p>{row.self_report_note || (row.wants_to_talk === '愿意' ? '本人表示愿意交流。' : '未填写补充说明。')}</p>{row.sleep_hours != null && <span className="timeline-detail">睡眠 {row.sleep_hours} 小时</span>}</div></article>)}</div> : <InlineEmpty text="还没有关怀内容。新增每日记录后，心情和交流意愿会显示在这里。" />}
     </section>
@@ -382,10 +394,10 @@ function CarePage({ patient, checkins }) {
 
 function RecordsPage({ patient, records, showForm, setShowForm, form, setForm, onSubmit, saving }) {
   return <>
-    <PageHeading eyebrow="资料收纳" title="病历资料" description={`查看和整理 ${patient.display_name} 的模拟病历文字。`} action={<button className="button button-primary" onClick={() => setShowForm(!showForm)}>{showForm ? '收起表单' : '＋ 新增病历'}</button>} />
+    <PageHeading eyebrow="资料收纳" title="病历资料" description={`查看和整理 ${displayPatientName(patient.display_name)} 的病历文字。`} action={<button className="button button-primary" onClick={() => setShowForm(!showForm)}>{showForm ? '收起表单' : '＋ 新增病历'}</button>} />
     <div className="storage-note"><span>i</span><div><strong>当前版本保存文字记录</strong><p>PDF 原件上传和私有文件存储尚未接入。不要在这里填写真实病历。</p></div></div>
-    {showForm && <form className="panel form-panel" onSubmit={onSubmit}><div className="panel-heading"><div><h2>新增病历文字</h2><p>仅添加课堂模拟内容。</p></div></div><div className="form-grid"><label className="field"><span>记录日期</span><input type="date" required value={form.record_date} onChange={(event) => setForm((current) => ({ ...current, record_date: event.target.value }))} /></label><label className="field"><span>记录类型</span><select value={form.record_type} onChange={(event) => setForm((current) => ({ ...current, record_type: event.target.value }))}><option>建档记录</option><option>随访记录</option><option>检查记录</option><option>其他</option></select></label><label className="field field-wide"><span>病历文字</span><textarea rows="6" maxLength="5000" required placeholder="输入模拟病历或复诊时要说明的情况" value={form.record_text} onChange={(event) => setForm((current) => ({ ...current, record_text: event.target.value }))} /></label></div><div className="form-actions"><span>保存后会在当前长辈的病历列表中显示。</span><button className="button button-primary" type="submit" disabled={saving}>{saving ? '正在保存…' : '保存病历'}</button></div></form>}
-    <section className="record-list">{records.length ? records.map((record) => <article className="panel record-card" key={record.record_id}><div className="record-icon">▤</div><div className="record-body"><div className="record-title-row"><div><span className="record-type">{record.record_type || '病历记录'}</span><h2>{record.source_label || '病历文字'}</h2></div><time>{dateLabel(record.record_date)}</time></div><details><summary>查看记录内容 <span>⌄</span></summary><p className="record-text">{record.record_text}</p></details></div></article>) : <section className="panel"><InlineEmpty text="还没有病历资料。可以新增一份模拟文字记录。" /></section>}</section>
+    {showForm && <form className="panel form-panel" onSubmit={onSubmit}><div className="panel-heading"><div><h2>新增病历文字</h2><p>填写需要留存的病历或随访内容。</p></div></div><div className="form-grid"><label className="field"><span>记录日期</span><input type="date" required value={form.record_date} onChange={(event) => setForm((current) => ({ ...current, record_date: event.target.value }))} /></label><label className="field"><span>记录类型</span><select value={form.record_type} onChange={(event) => setForm((current) => ({ ...current, record_type: event.target.value }))}><option>建档记录</option><option>随访记录</option><option>检查记录</option><option>其他</option></select></label><label className="field field-wide"><span>病历文字</span><textarea rows="6" maxLength="5000" required placeholder="填写病历或复诊时要说明的情况" value={form.record_text} onChange={(event) => setForm((current) => ({ ...current, record_text: event.target.value }))} /></label></div><div className="form-actions"><span>保存后会在当前长辈的病历列表中显示。</span><button className="button button-primary" type="submit" disabled={saving}>{saving ? '正在保存…' : '保存病历'}</button></div></form>}
+    <section className="record-list">{records.length ? records.map((record) => <article className="panel record-card" key={record.record_id}><div className="record-icon">▤</div><div className="record-body"><div className="record-title-row"><div><span className="record-type">{record.record_type || '病历记录'}</span><h2>{displayRecordSource(record.source_label) || '病历文字'}</h2></div><time>{dateLabel(record.record_date)}</time></div><details><summary>查看记录内容 <span>⌄</span></summary><p className="record-text">{displayRecordText(record.record_text)}</p></details></div></article>) : <section className="panel"><InlineEmpty text="还没有病历资料。可以新增一份文字记录。" /></section>}</section>
   </>
 }
 
@@ -400,16 +412,16 @@ function SummaryPage({ patient, checkins, records, summary, setSummary }) {
   return <>
     <PageHeading eyebrow="复诊准备" title="复诊小结" description="先汇总已记录的信息，再由本人或家属核对、修改后使用。" action={<button className="button button-primary no-print" onClick={() => window.print()}>打印 / 保存 PDF</button>} />
     <div className="summary-banner"><span className="summary-banner-icon">✧</span><div><strong>这是一份可修改的草稿</strong><p>它只整理已有记录，不提供诊断、用药或治疗建议。</p></div></div>
-    <div className="summary-toolbar no-print"><label>统计范围 <select value={range} onChange={(event) => setRange(Number(event.target.value))}><option value="7">最近 7 天</option><option value="30">最近 30 天</option></select></label><span>{patient.display_name} · {patient.patient_id}</span></div>
-    <section className="panel summary-panel"><div className="summary-paper-head"><div className="paper-logo">S</div><div><strong>复诊准备小结</strong><span>SyCare 模拟资料 · 请核对后使用</span></div><span className="paper-date">整理日期 {dateLabel(localDate())}</span></div><textarea aria-label="可编辑的复诊小结" value={summary} onChange={(event) => setSummary(event.target.value)} rows="17" /><div className="form-actions no-print"><span>文字可编辑，打印前请核对日期、读数和来源。</span><button className="button button-outline" onClick={copyText}>复制小结</button></div></section>
+    <div className="summary-toolbar no-print"><label>统计范围 <select value={range} onChange={(event) => setRange(Number(event.target.value))}><option value="7">最近 7 天</option><option value="30">最近 30 天</option></select></label><span>{displayPatientName(patient.display_name)} · {patient.patient_id}</span></div>
+    <section className="panel summary-panel"><div className="summary-paper-head"><div className="paper-logo">S</div><div><strong>复诊准备小结</strong><span>SyCare · 请核对后使用</span></div><span className="paper-date">整理日期 {dateLabel(localDate())}</span></div><textarea aria-label="可编辑的复诊小结" value={summary} onChange={(event) => setSummary(event.target.value)} rows="17" /><div className="form-actions no-print"><span>文字可编辑，打印前请核对日期、读数和来源。</span><button className="button button-outline" onClick={copyText}>复制小结</button></div></section>
     <section className="source-list"><h2>本次草稿引用的资料</h2><div className="source-pills">{checkins.slice(0, range).map((row) => <span key={row.checkin_id}>{dateLabel(row.record_date)} · 每日记录</span>)}{records.slice(0, 3).map((row) => <span key={row.record_id}>{dateLabel(row.record_date)} · {row.record_type || '病历'}</span>)}</div></section>
   </>
 }
 
 function AskPage({ patient, question, setQuestion, onSubmit, answer }) {
   return <>
-    <PageHeading eyebrow="资料问答" title="问一问" description={`围绕 ${patient.display_name} 的模拟记录提问，回答会附上使用的资料日期。`} />
-    <div className="ask-layout"><section className="panel ask-panel"><div className="ask-intro"><div className="ask-sparkle">✳</div><div><h2>你好，我是 SyCare</h2><p>我可以帮你找到已记录的日期和内容；不知道的会说明，不会替医生作决定。</p></div></div><div className="suggestion-row"><span>可以试试</span>{['最近睡眠怎么样？', '最近记录了哪些血压？', '病历里写了什么？'].map((item) => <button key={item} className="suggestion" onClick={() => setQuestion(item)}>{item}</button>)}</div><form className="ask-form" onSubmit={onSubmit}><label className="sr-only" htmlFor="question-input">输入问题</label><textarea id="question-input" rows="3" maxLength="500" placeholder="例如：最近一周睡眠情况如何？" value={question} onChange={(event) => setQuestion(event.target.value)} /><div className="ask-form-bottom"><span>仅查询当前选中长辈的记录</span><button className="button button-primary" type="submit" disabled={!question.trim()}>查看回答 <span>→</span></button></div></form>{answer && <article className="answer-card"><div className="answer-heading"><span className="answer-avatar">S</span><div><strong>SyCare 整理结果</strong><span>根据已保存的模拟资料</span></div></div><p>{answer.text}</p>{answer.sources?.length > 0 && <div className="answer-sources"><strong>资料来源</strong>{answer.sources.map((source) => <span key={source}>{source}</span>)}</div>}</article>}</section><aside className="ask-side"><section className="panel"><span className="side-icon">⌕</span><h2>回答范围</h2><p>回答只引用当前选中长辈的记录。若记录里没有答案，我会告诉你缺少什么。</p></section><section className="panel caution-panel"><span className="caution-icon">!</span><h2>健康问题请咨询医生</h2><p>我不会诊断疾病、建议调药或判断是否需要治疗。紧急情况请联系当地急救服务或医生。</p></section></aside></div>
+    <PageHeading eyebrow="资料问答" title="问一问" description={`围绕 ${displayPatientName(patient.display_name)} 的记录提问，回答会附上使用的资料日期。`} />
+    <div className="ask-layout"><section className="panel ask-panel"><div className="ask-intro"><div className="ask-sparkle">✳</div><div><h2>你好，我是 SyCare</h2><p>我可以帮你找到已记录的日期和内容；不知道的会说明，不会替医生作决定。</p></div></div><div className="suggestion-row"><span>可以试试</span>{['最近睡眠怎么样？', '最近记录了哪些血压？', '病历里写了什么？'].map((item) => <button key={item} className="suggestion" onClick={() => setQuestion(item)}>{item}</button>)}</div><form className="ask-form" onSubmit={onSubmit}><label className="sr-only" htmlFor="question-input">输入问题</label><textarea id="question-input" rows="3" maxLength="500" placeholder="例如：最近一周睡眠情况如何？" value={question} onChange={(event) => setQuestion(event.target.value)} /><div className="ask-form-bottom"><span>仅查询当前选中长辈的记录</span><button className="button button-primary" type="submit" disabled={!question.trim()}>查看回答 <span>→</span></button></div></form>{answer && <article className="answer-card"><div className="answer-heading"><span className="answer-avatar">S</span><div><strong>SyCare 整理结果</strong><span>根据已保存的资料整理</span></div></div><p>{answer.text}</p>{answer.sources?.length > 0 && <div className="answer-sources"><strong>资料来源</strong>{answer.sources.map((source) => <span key={source}>{source}</span>)}</div>}</article>}</section><aside className="ask-side"><section className="panel"><span className="side-icon">⌕</span><h2>回答范围</h2><p>回答只引用当前选中长辈的记录。若记录里没有答案，我会告诉你缺少什么。</p></section><section className="panel caution-panel"><span className="caution-icon">!</span><h2>健康问题请咨询医生</h2><p>我不会诊断疾病、建议调药或判断是否需要治疗。紧急情况请联系当地急救服务或医生。</p></section></aside></div>
   </>
 }
 
@@ -438,7 +450,7 @@ function buildSummary(patient, checkins, days, records = []) {
   const wantsTalk = periodRows.filter((row) => row.wants_to_talk === '愿意')
   const recentRecords = records.slice(0, 3)
   return [
-    `姓名：${patient.display_name}（模拟资料，编号 ${patient.patient_id}）`,
+    `姓名：${displayPatientName(patient.display_name)}（编号 ${patient.patient_id}）`,
     `年龄：${patient.age_years ? `${patient.age_years} 岁` : '未记录'}　性别：${patient.gender || '未记录'}`,
     `整理范围：最近 ${days} 天（${periodRows.length ? dateLabel(periodRows.at(-1)?.record_date) : '暂无记录'} 至 ${periodRows.length ? dateLabel(periodRows[0]?.record_date) : '暂无记录'}）`,
     '',
@@ -452,7 +464,7 @@ function buildSummary(patient, checkins, days, records = []) {
     `• 过敏情况：${patient.allergy_status || '未记录。'}`,
     '',
     '三、病历资料',
-    recentRecords.length ? recentRecords.map((record) => `• ${dateLabel(record.record_date)} ${record.record_type || '病历'}：${record.record_text.replace(/\s+/g, ' ').slice(0, 150)}${record.record_text.length > 150 ? '…' : ''}`).join('\n') : '• 暂无病历文字资料。',
+    recentRecords.length ? recentRecords.map((record) => { const recordText = displayRecordText(record.record_text).replace(/\s+/g, ' '); return `• ${dateLabel(record.record_date)} ${record.record_type || '病历'}：${recordText.slice(0, 150)}${recordText.length > 150 ? '…' : ''}` }).join('\n') : '• 暂无病历文字资料。',
     '',
     '请本人或家属核对以上内容；未记录的信息保持未知。此草稿用于复诊沟通，不是诊断或治疗建议。',
   ].join('\n')
@@ -461,7 +473,7 @@ function buildSummary(patient, checkins, days, records = []) {
 function answerQuestion(question, patient, checkins, records) {
   const normalized = question.toLowerCase()
   if (/调药|加药|减药|药量|剂量|吃几片|能不能吃药|诊断|是不是.*病|治疗方案|处方/.test(question)) {
-    return { text: '我不能根据这些模拟记录判断疾病，也不能建议加减药或治疗。请把药盒、医生处方和最近记录带给医生或药师核对。', sources: [] }
+    return { text: '我不能根据这些记录判断疾病，也不能建议加减药或治疗。请把药盒、医生处方和最近记录带给医生或药师核对。', sources: [] }
   }
   const recent = checkins.slice(0, 30)
   if (/血压|收缩压|舒张压/.test(question)) {
@@ -481,7 +493,7 @@ function answerQuestion(question, patient, checkins, records) {
   if (/病历|既往|过敏|医院|检查/.test(question)) {
     if (!records.length && !patient.history_summary && !patient.allergy_status) return { text: '当前档案还没有病历、既往情况或过敏资料。', sources: [] }
     const source = records.slice(0, 3).map((row) => `${dateLabel(row.record_date)} ${row.record_type || '病历'}`)
-    const text = [patient.history_summary && `档案摘要：${patient.history_summary}`, patient.allergy_status && `过敏情况：${patient.allergy_status}`, ...records.slice(0, 2).map((row) => `${dateLabel(row.record_date)}：${row.record_text.replace(/\s+/g, ' ').slice(0, 180)}${row.record_text.length > 180 ? '…' : ''}`)].filter(Boolean).join('；')
+    const text = [patient.history_summary && `档案摘要：${patient.history_summary}`, patient.allergy_status && `过敏情况：${patient.allergy_status}`, ...records.slice(0, 2).map((row) => { const recordText = displayRecordText(row.record_text).replace(/\s+/g, ' '); return `${dateLabel(row.record_date)}：${recordText.slice(0, 180)}${recordText.length > 180 ? '…' : ''}` })].filter(Boolean).join('；')
     return { text: `${text} 请以原始资料和医生核对为准。`, sources: source }
   }
   if (/心情|交流|聊天|关怀|想说话/.test(normalized)) {
