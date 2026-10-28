@@ -370,3 +370,39 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .summary-paper-head { border-bottom: 1px solid #aaa; }
   .paper-logo { print-color-adjust: exact; }
 }
+
+/* 家属模式补充 */
+.exit-family { margin-bottom: 12px; }
+.tab-row { display: flex; gap: 6px; margin: 19px 0 0; }
+.tab-row button { min-height: 38px; padding: 0 14px; border: 1px solid #e3eae3; border-radius: 10px; background: #fff; color: #6f7d74; font-size: 12px; font-weight: 600; }
+.tab-row button.active { border-color: #cfe3d4; background: #edf6f0; color: #1f714e; }
+.tab-row + .panel { margin-top: 10px; }
+.record-unverified { border-color: #efd9a8; background: #fffcf4; }
+.record-photo { display: block; max-width: min(320px, 100%); max-height: 320px; margin-top: 11px; border: 1px solid #e7ece7; border-radius: 10px; }
+.verify-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 11px; border-top: 1px solid #f0ead9; color: #94886a; font-size: 10px; }
+.med-form { display: grid; grid-template-columns: 1.4fr 1fr 1fr auto; align-items: end; gap: 12px; margin-top: 16px; padding-top: 14px; border-top: 1px solid #edf1ed; }
+.form-error { margin: 10px 0 0; color: #a65f58; font-size: 11px; }
+.visit-panel { margin-top: 15px; max-width: 360px; }
+.question-panel, .reminder-panel { margin-top: 15px; }
+.unverified-section { margin-top: 20px; }
+.unverified-section h2 { margin: 0; color: #304037; font-size: 14px; }
+.unverified-section p { margin: 5px 0 0; color: #939d96; font-size: 11px; }
+.summary-toolbar input[type='date'] { min-height: 33px; padding: 0 8px; border: 1px solid #e4eae4; border-radius: 8px; color: #57645b; font-size: 11px; }
+.reminder-copy { margin: 0 0 12px; color: #69766d; font-size: 12px; line-height: 1.7; }
+.consent-box { display: grid; gap: 10px; margin-bottom: 12px; padding: 12px; border: 1px solid #e4eee6; border-radius: 10px; background: #f8fbf8; color: #526158; font-size: 12px; }
+.consent-box label { display: flex; align-items: flex-start; gap: 8px; line-height: 1.6; }
+.consent-box .button { justify-self: start; }
+.reminder-panel > .button { margin: 0 0 12px; }
+.pin-screen { display: grid; place-items: center; min-height: 100vh; padding: 20px; background: #f5f7f5; }
+.pin-card { display: grid; gap: 12px; width: min(360px, 100%); padding: 28px; border: 1px solid #e7ece7; border-radius: 18px; background: #fff; box-shadow: var(--shadow); text-align: center; }
+.pin-card h1 { margin: 0; font-size: 22px; }
+.pin-card p { margin: 0; color: #7d8981; font-size: 13px; line-height: 1.7; }
+.pin-card input { min-height: 54px; border: 1px solid #dfe8e0; border-radius: 12px; font-size: 28px; letter-spacing: .5em; text-align: center; }
+.pin-card small { color: #a1aaa3; font-size: 11px; }
+.pin-error { color: #a65f58 !important; }
+
+@media (max-width: 760px) {
+  .med-form { grid-template-columns: 1fr 1fr; }
+  .exit-family { display: none; }
+  .verify-row { flex-direction: column; align-items: flex-start; }
+}
