@@ -4,6 +4,7 @@
 
 import { average, daysBetween, displayPatientName, displayRecordText, hasBloodPressure, monthDay } from './format'
 import { isUnverified } from './recordLabels'
+import { IMPLAUSIBLE_TEXT, checkValue, formatValue, outOfRangeText, readingsFor, todayReading } from './items'
 
 export const ASSISTANT_NAME = '小安'
 
@@ -22,6 +23,13 @@ const DIGITS = { 零: 0, 〇: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5,
 export function chineseNumber(text) {
   if (!text) return null
   if (/^\d+(\.\d+)?$/.test(text)) return Number(text)
+  // "七点八" → 7.8，"三十六点五" → 36.5
+  if (text.includes('点')) {
+    const [whole, fraction] = text.split('点')
+    const integer = chineseNumber(whole)
+    const decimals = [...(fraction || '')].map((char) => DIGITS[char] ?? char).join('')
+    return integer != null && /^\d+$/.test(decimals) ? Number(`${integer}.${decimals}`) : null
+  }
   let rest = text
   let total = 0
   if (rest.includes('百')) {
@@ -81,6 +89,37 @@ export function parseCheckin(text) {
   return fields
 }
 
+const ITEM_NUM = '(\\d+(?:\\.\\d+)?|[零〇一二两三四五六七八九十百点]+)'
+
+// 家属/医生设置的项目（血压除外）："血糖七点八""体温 37.5"
+export function parseItems(text, items = []) {
+  const measures = []
+  items.filter((item) => item.kind === 'number').forEach((item) => {
+    const names = item.aliases.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+    const match = text.match(new RegExp(`(?:${names})\\D{0,4}?${ITEM_NUM}`))
+    const value = match ? chineseNumber(match[1]) : null
+    if (value == null) return
+    const tag = item.tags?.find((candidate) => text.includes(candidate.replace('2小时', ''))) || null
+    measures.push({ item, value, tag })
+  })
+  return measures
+}
+
+const SYMPTOM_WORDS = [
+  ['头晕', /头晕|头昏/],
+  ['头痛', /头(痛|疼)/],
+  ['腿脚肿', /(腿|脚).{0,2}肿/],
+  ['咳嗽', /咳嗽|咳得/],
+  ['没胃口', /没胃口|不想吃饭|吃不下/],
+  ['身上疼', /(腰|背|腿|关节|膝盖|身上).{0,2}(疼|痛)/],
+  ['大便不正常', /便秘|拉肚子|腹泻|大便/],
+  ['睡不好', /没睡好|睡得不好|睡不着|失眠/],
+]
+
+export function parseSymptoms(text) {
+  return SYMPTOM_WORDS.filter(([, pattern]) => pattern.test(text)).map(([label]) => label)
+}
+
 export function checkBloodPressure(fields) {
   const sys = fields.systolic_mmhg
   const dia = fields.diastolic_mmhg
@@ -96,12 +135,14 @@ export function checkBloodPressure(fields) {
   return result
 }
 
-export function describeFields(fields) {
+export function describeFields(fields, measures = [], symptoms = []) {
   const parts = []
   if (fields.systolic_mmhg != null) parts.push(`高压 ${fields.systolic_mmhg}，低压 ${fields.diastolic_mmhg}`)
   if (fields.pulse_bpm != null) parts.push(`心跳 ${fields.pulse_bpm}`)
+  measures.forEach(({ item, value, tag }) => parts.push(`${tag ? `${tag}` : ''}${item.label} ${formatValue(item, value)}`))
   if (fields.sleep_hours != null) parts.push(`睡了 ${fields.sleep_hours} 小时`)
   if (fields.mood_response) parts.push(`心情${fields.mood_response}`)
+  if (symptoms.length) parts.push(`不舒服：${symptoms.join('、')}`)
   if (fields.wants_to_talk === '愿意') parts.push('想找人聊聊')
   // 没有识别出数字和心情时，原话照录
   if (!parts.length && fields.self_report_note) parts.push(`"${fields.self_report_note}"`)
@@ -168,18 +209,35 @@ export function interpret(text, ctx) {
   if (/(药.{0,3}(吃了|吃过|已经吃)|吃过药|吃了药)/.test(input)) return { type: 'meds_taken' }
 
   const fields = parseCheckin(input)
-  const hasNumbers = fields.systolic_mmhg != null || fields.sleep_hours != null || fields.pulse_bpm != null
-  const hasFeeling = fields.mood_response || fields.wants_to_talk || /(没睡好|睡得不好|睡不着|失眠|腿肿|头晕|没胃口)/.test(input)
-  if (hasNumbers || (hasFeeling && !isQuestion(input))) {
-    return { type: 'record', fields: { ...fields, self_report_note: input }, check: checkBloodPressure(fields) }
+  const measures = parseItems(input, ctx.items)
+  const symptoms = parseSymptoms(input)
+  const hasNumbers = fields.systolic_mmhg != null || fields.sleep_hours != null || fields.pulse_bpm != null || measures.length > 0
+  const hasFeeling = fields.mood_response || fields.wants_to_talk || symptoms.length > 0
+  if ((hasNumbers || hasFeeling) && !(isQuestion(input) && !hasNumbers)) {
+    const check = checkBloodPressure(fields)
+    measures.forEach((measure) => { measure.check = checkValue(measure.item, measure.value) })
+    if (measures.some((measure) => measure.check.implausible)) check.implausible = true
+    return { type: 'record', fields: { ...fields, self_report_note: input }, measures, symptoms, check }
   }
 
   return { type: 'answer', ...answerQuestion(input, ctx) }
 }
 
-export function answerQuestion(question, { patient, checkins, records, slots = [] }) {
+export function answerQuestion(question, { patient, checkins, records, slots = [], items = [], measurements = [] }) {
   if (/^(你好|您好|hi|hello|在吗)/i.test(question)) {
-    return { text: `您好，我是${ASSISTANT_NAME}。您可以告诉我今天的血压、睡眠和心情，也可以问我以前记过的情况。`, sources: [] }
+    return { text: `您好，我是${ASSISTANT_NAME}。您可以告诉我今天的${[...items.map((item) => item.label), '睡眠', '心情'].join('、')}，也可以问我以前记过的情况。`, sources: [] }
+  }
+
+  const asked = items.find((item) => item.kind === 'number' && item.aliases.some((name) => question.includes(name)))
+  if (asked) {
+    const rows = readingsFor(measurements, asked.key).slice(0, 7)
+    if (!rows.length) return { text: `记录里还没有${asked.label}。量好了直接告诉我就行。`, sources: [] }
+    const values = rows.map((row) => Number(row.value_num))
+    const outside = rows.filter((row) => checkValue(asked, row.value_num).outOfRange).length
+    return {
+      text: `最近 ${rows.length} 次${asked.label}：最近一次是 ${formatValue(asked, rows[0].value_num)}${rows[0].value_text ? `（${rows[0].value_text}）` : ''}，最高 ${formatValue(asked, Math.max(...values))}，最低 ${formatValue(asked, Math.min(...values))}。${outside ? `其中 ${outside} 次超出了家人和医生设的提醒范围，复诊时可以给医生看看。` : ''}我只整理记录，不判断病情。`,
+      sources: rows.map((row) => monthDay(row.record_date)),
+    }
   }
 
   if (/药/.test(question) && /(今天|吃了吗|吃没吃|有没有吃)/.test(question)) {
@@ -239,13 +297,26 @@ export function answerQuestion(question, { patient, checkins, records, slots = [
   }
 
   return {
-    text: '这个问题我现在还答不上来。我可以帮您记血压、睡眠和心情，查看以前的记录和病历，也可以帮您记下想问医生的问题。',
+    text: '这个问题我现在还答不上来。我可以帮您记每天的情况，查看以前的记录和病历，也可以帮您记下想问医生的问题。',
     sources: [],
   }
 }
 
+// 保存以后小安要提醒的话：先看血压，再看其他项目
+export function safetyAfterSave(fields, measures = []) {
+  const sys = fields.systolic_mmhg
+  const dia = fields.diastolic_mmhg
+  if (sys != null && (sys >= BP_RULES.urgentSystolic || dia >= BP_RULES.urgentDiastolic)) return { tone: 'urgent', text: SAFETY_TEXT.urgent }
+  if (sys != null && sys < BP_RULES.lowSystolic) return { tone: 'caution', text: SAFETY_TEXT.low }
+  const outside = measures.find((measure) => checkValue(measure.item, measure.value).outOfRange)
+  if (outside) return { tone: 'caution', text: outOfRangeText(outside.item, checkValue(outside.item, outside.value).outOfRange) }
+  return null
+}
+
+export { IMPLAUSIBLE_TEXT }
+
 // 打开助手时小安先说的话，跟着今天的状态变
-export function openingLine({ patient, todayRow, slots, visitDate, questions, today }) {
+export function openingLine({ patient, todayRow, slots, visitDate, questions, today, items = [], measurements = [] }) {
   const now = new Date()
   const clock = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   const dueSlot = slots.find((slot) => !slot.taken && slot.time <= clock)
@@ -255,16 +326,24 @@ export function openingLine({ patient, todayRow, slots, visitDate, questions, to
       text: `${dueSlot.time} 的${dueSlot.med.name}吃了吗？吃过了，点一下首页的"已吃"，或者直接告诉我"吃过了"。`,
     }
   }
-  if (!hasBloodPressure(todayRow)) {
+  const tracksBp = items.some((item) => item.kind === 'bp')
+  if (tracksBp && !hasBloodPressure(todayRow)) {
     return {
       bubble: '今天量血压了吗？',
-      text: `今天量血压了吗？量好了直接告诉我就行，比如"高压 130，低压 80，心跳 70"。${SAFETY_TEXT.measure}`,
+      text: `今天量血压了吗？量好了直接告诉我就行，比如"高压 130，低压 80，心跳 70"，也可以在首页点"血压"自己填。${SAFETY_TEXT.measure}`,
     }
   }
-  if (todayRow.systolic_mmhg >= BP_RULES.urgentSystolic || todayRow.diastolic_mmhg >= BP_RULES.urgentDiastolic) {
+  if (hasBloodPressure(todayRow) && (todayRow.systolic_mmhg >= BP_RULES.urgentSystolic || todayRow.diastolic_mmhg >= BP_RULES.urgentDiastolic)) {
     return {
       bubble: '刚才血压偏高，休息后再量一次吧',
       text: `今天记的血压是 ${todayRow.systolic_mmhg}/${todayRow.diastolic_mmhg}，偏高。休息 5 分钟后再量一次，量好了告诉我。如果有剧烈头痛、胸痛、气短、说话不清或手脚无力，请马上拨打 120。`,
+    }
+  }
+  const missing = items.find((item) => item.kind === 'number' && !todayReading(measurements, item.key, today))
+  if (missing) {
+    return {
+      bubble: `今天量${missing.label}了吗？`,
+      text: `今天量${missing.label}了吗？量好了告诉我${missing.key === 'glucose' ? '，比如"空腹血糖 6.1"' : '数字就行'}，也可以在首页点"${missing.label}"自己填。`,
     }
   }
   if (!todayRow?.mood_response) {

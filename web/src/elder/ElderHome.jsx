@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import AssistantAvatar from './AssistantAvatar'
+import RecordSheet from './RecordSheet'
 import { ASSISTANT_NAME } from '../lib/assistant'
-import { displayPatientName, greetingWord, hasBloodPressure, todayHeading } from '../lib/format'
+import { displayPatientName, greetingWord, hasBloodPressure, localDate, todayHeading } from '../lib/format'
+import { SYMPTOMS, SYMPTOM_KEY, formatValue, todayReading } from '../lib/items'
+
+const SLEEP_ITEM = { key: 'sleep', label: '睡眠', kind: 'sleep' }
 
 const MOODS = [
   { value: '很好', face: '😊', label: '很好' },
@@ -9,9 +13,25 @@ const MOODS = [
   { value: '不太好', face: '😟', label: '不太好' },
 ]
 
-export default function ElderHome({ patient, todayRow, slots, opening, saving, onToggleMed, onSetMood, onOpenChat, onOpenFamily }) {
+export default function ElderHome({ patient, todayRow, slots, items, measurements, opening, saving, onToggleMed, onSetMood, onSave, onOpenChat, onOpenFamily }) {
   const [showProfile, setShowProfile] = useState(false)
+  const [editing, setEditing] = useState(null)
+  const [picked, setPicked] = useState([])
   const name = displayPatientName(patient.display_name)
+  const today = localDate()
+  const todaySymptoms = [...new Set(measurements.filter((row) => row.item_key === SYMPTOM_KEY && row.record_date === today).flatMap((row) => row.value_text.split('、')))]
+
+  function shown(item) {
+    if (item.kind === 'bp') return hasBloodPressure(todayRow) ? `${todayRow.systolic_mmhg} / ${todayRow.diastolic_mmhg}` : null
+    if (item.kind === 'sleep') return todayRow?.sleep_hours != null ? `${todayRow.sleep_hours} 小时` : null
+    const reading = todayReading(measurements, item.key, today)
+    return reading ? `${formatValue(item, reading.value_num)}` : null
+  }
+
+  async function saveSymptoms() {
+    const error = await onSave({ symptoms: picked })
+    if (!error) setPicked([])
+  }
 
   return (
     <div className="elder-home">
@@ -60,14 +80,15 @@ export default function ElderHome({ patient, todayRow, slots, opening, saving, o
       <section className="elder-card">
         <h2>今天的情况</h2>
         <div className="today-grid">
-          <div className="today-item">
-            <span>血压</span>
-            <strong>{hasBloodPressure(todayRow) ? `${todayRow.systolic_mmhg} / ${todayRow.diastolic_mmhg}` : '还没记'}</strong>
-          </div>
-          <div className="today-item">
-            <span>睡眠</span>
-            <strong>{todayRow?.sleep_hours != null ? `${todayRow.sleep_hours} 小时` : '还没记'}</strong>
-          </div>
+          {[...items, SLEEP_ITEM].map((item) => {
+            const value = shown(item)
+            return (
+              <button key={item.key} className={`today-item ${value ? '' : 'empty'}`} onClick={() => setEditing(item)}>
+                <span>{item.label}</span>
+                <strong>{value || '点这里填'}</strong>
+              </button>
+            )
+          })}
         </div>
         <p className="mood-question">今天心情怎么样？</p>
         <div className="mood-row">
@@ -84,8 +105,30 @@ export default function ElderHome({ patient, todayRow, slots, opening, saving, o
             </button>
           ))}
         </div>
-        <button className="elder-secondary" onClick={onOpenChat}>记血压、睡眠，跟{ASSISTANT_NAME}说就行 →</button>
+        <button className="elder-secondary" onClick={onOpenChat}>不想自己填？跟{ASSISTANT_NAME}说就行 →</button>
       </section>
+
+      <section className="elder-card">
+        <h2>哪里不舒服？</h2>
+        {todaySymptoms.length > 0 && <p className="symptom-today">今天记了：{todaySymptoms.join('、')}</p>}
+        <div className="symptom-grid">
+          {SYMPTOMS.map((symptom) => (
+            <button
+              key={symptom}
+              className={`symptom-chip ${picked.includes(symptom) ? 'selected' : ''}`}
+              aria-pressed={picked.includes(symptom)}
+              onClick={() => setPicked((current) => (current.includes(symptom) ? current.filter((item) => item !== symptom) : [...current, symptom]))}
+            >
+              {symptom}
+            </button>
+          ))}
+        </div>
+        {picked.length > 0 && <button className="elder-primary" onClick={saveSymptoms} disabled={saving}>{saving ? '正在保存…' : `记下来：${picked.join('、')}`}</button>}
+        <button className="elder-secondary" onClick={onOpenChat}>别的不舒服，跟{ASSISTANT_NAME}说 →</button>
+        <p className="emergency-note">胸口痛、喘不上气、说话不清、手脚突然没力气，请马上拨打 120。</p>
+      </section>
+
+      {editing && <RecordSheet item={editing} todayRow={todayRow} onSave={onSave} onClose={() => setEditing(null)} />}
 
       {showProfile && (
         <div className="sheet-backdrop" onClick={() => setShowProfile(false)}>

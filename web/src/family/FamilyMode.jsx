@@ -4,6 +4,7 @@ import { BP_RULES } from '../lib/assistant'
 import { average, dateLabel, daysBetween, displayPatientName, displayRecordSource, displayRecordText, hasBloodPressure, localDate, monthDay, shortDate } from '../lib/format'
 import { DEMO_PIN, getMedLog, getPhoto, medSlots } from '../lib/localStore'
 import { isPhotoRecord, isUnverified } from '../lib/recordLabels'
+import { PRESET_ITEMS, SYMPTOM_KEY, checkValue, formatValue, presetConfig, rangeText, readingsFor } from '../lib/items'
 
 // 日常的（每天看的数据、用药、提醒）放一页，单次的（复诊、病历）放一页
 const NAV_ITEMS = [
@@ -122,13 +123,16 @@ function Daily(props) {
         <StatCard icon="♡" tone="rose" label="想找人聊聊" value={`${talkDays} 天`} unit="" foot="本人意愿，不代表已通知家人" />
         <StatCard icon="▤" tone="green" label="病历" value={`${records.length} 份`} unit="" foot={unverified ? `${unverified} 份拍照上传待核对` : '没有待核对的照片'} />
       </div>
-      <section className="panel chart-panel">
+      <ItemSummary {...props} />
+
+      {(bpRows.length > 0 || props.items.some((item) => item.kind === 'bp')) && <section className="panel chart-panel">
         <div className="panel-heading"><div><h2>血压记录</h2><p>最近 7 条记录中的读数，虚线为高压 {BP_RULES.highSystolic}</p></div></div>
         <BloodPressureChart rows={recent} />
         <div className="chart-legend"><span><i className="legend-dot systolic" />高压（收缩压）</span><span><i className="legend-dot diastolic" />低压（舒张压）</span><span className="chart-footnote">仅展示记录值，不作诊断</span></div>
-      </section>
+      </section>}
 
       <MedList {...props} />
+      <ItemSettings {...props} />
 
       <div className="tab-row" role="tablist">
         <button role="tab" aria-selected={tab === 'health'} className={tab === 'health' ? 'active' : ''} onClick={() => setTab('health')}>健康数据</button>
@@ -252,6 +256,115 @@ function Records({ records, saving, onVerify, onAddTextRecord }) {
   )
 }
 
+// 每个记录项目最近 7 天的情况，加上"哪里不舒服"
+function symptomCounts(measurements, from, to) {
+  const days = {}
+  measurements
+    .filter((row) => row.item_key === SYMPTOM_KEY && row.record_date >= from && row.record_date <= to)
+    .forEach((row) => row.value_text.split('、').forEach((symptom) => { days[symptom] = new Set([...(days[symptom] || []), row.record_date]) }))
+  return Object.entries(days).map(([symptom, dates]) => [symptom, dates.size]).sort((a, b) => b[1] - a[1])
+}
+
+function ItemSummary({ items, measurements }) {
+  const from = localDate(-6)
+  const numberItems = items.filter((item) => item.kind === 'number')
+  const symptoms = symptomCounts(measurements, from, localDate())
+  if (!numberItems.length && !symptoms.length) return null
+  return (
+    <section className="panel item-summary">
+      <div className="panel-heading"><div><h2>其他记录项目</h2><p>最近 7 天。超出范围只是提醒，不作诊断。</p></div></div>
+      {numberItems.length > 0 && (
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead><tr><th>项目</th><th>最近一次</th><th>7 天内记了</th><th>超出提醒范围</th></tr></thead>
+            <tbody>
+              {numberItems.map((item) => {
+                const rows = readingsFor(measurements, item.key)
+                const week = rows.filter((row) => row.record_date >= from)
+                const outside = week.filter((row) => checkValue(item, row.value_num).outOfRange).length
+                return (
+                  <tr key={item.key}>
+                    <td><strong>{item.label}</strong><small className="muted"> {rangeText(item)}</small></td>
+                    <td>{rows[0] ? `${formatValue(item, rows[0].value_num)}${rows[0].value_text ? `（${rows[0].value_text}）` : ''} · ${monthDay(rows[0].record_date)}` : <span className="muted">还没有</span>}</td>
+                    <td>{week.length} 次</td>
+                    <td>{outside ? <span className="dose-chip">{outside} 次</span> : '—'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="symptom-summary"><strong>哪里不舒服：</strong>{symptoms.length ? symptoms.map(([symptom, days]) => `${symptom} ${days} 天`).join('、') : '最近 7 天没有记'}</p>
+    </section>
+  )
+}
+
+// 家属或医生设置每天要记什么。预设常用的，不在列表里的可以自己加。
+function ItemSettings({ itemConfig, items, onItemsChange }) {
+  const [form, setForm] = useState({ label: '', unit: '', low: '', high: '' })
+  const [formError, setFormError] = useState('')
+  const toNumber = (value) => (value === '' || value == null ? null : Number(value))
+  const available = PRESET_ITEMS.filter((preset) => !itemConfig.some((entry) => entry.key === preset.key))
+
+  const updateRange = (key, field, value) => {
+    onItemsChange(itemConfig.map((entry) => (entry.key === key ? { ...entry, [field]: toNumber(value) } : entry)))
+  }
+
+  const addCustom = (event) => {
+    event.preventDefault()
+    const label = form.label.trim()
+    if (!label) { setFormError('请填写项目名称。'); return }
+    if ([...PRESET_ITEMS, ...items].some((item) => item.label === label)) { setFormError('已经有这个项目了。'); return }
+    if ([form.low, form.high].some((value) => value !== '' && !Number.isFinite(Number(value)))) { setFormError('提醒范围请填数字，不需要可以空着。'); return }
+    onItemsChange([...itemConfig, { key: `custom-${crypto.randomUUID().slice(0, 8)}`, label, unit: form.unit.trim(), low: toNumber(form.low), high: toNumber(form.high) }])
+    setForm({ label: '', unit: '', low: '', high: '' })
+    setFormError('')
+  }
+
+  return (
+    <section className="panel item-settings">
+      <div className="panel-heading"><div><h2>每天要记的项目</h2><p>请按医生的意见选择和填写提醒范围。睡眠、心情、哪里不舒服所有人都记，不用设置。</p></div></div>
+      {items.length ? (
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead><tr><th>项目</th><th>低于多少提醒</th><th>高于多少提醒</th><th /></tr></thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.key}>
+                  <td><strong>{item.label}</strong> <small className="muted">{item.unit}</small></td>
+                  {item.kind === 'bp' ? (
+                    <td colSpan="2"><small className="muted">高压 ≥ {BP_RULES.urgentSystolic} 或低压 ≥ {BP_RULES.urgentDiastolic} 提醒复测，高压 &lt; {BP_RULES.lowSystolic} 提醒偏低（示例，待临床老师核对）</small></td>
+                  ) : (
+                    <>
+                      <td><input className="range-input" inputMode="decimal" defaultValue={item.low ?? ''} onBlur={(event) => updateRange(item.key, 'low', event.target.value)} aria-label={`${item.label}低于多少提醒`} /></td>
+                      <td><input className="range-input" inputMode="decimal" defaultValue={item.high ?? ''} onBlur={(event) => updateRange(item.key, 'high', event.target.value)} aria-label={`${item.label}高于多少提醒`} /></td>
+                    </>
+                  )}
+                  <td><button className="text-button" onClick={() => onItemsChange(itemConfig.filter((entry) => entry.key !== item.key))}>不记了</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : <InlineEmpty text="除了睡眠、心情、哪里不舒服，还没有设置别的项目。" />}
+      {available.length > 0 && (
+        <div className="preset-row">
+          <span>常用项目：</span>
+          {available.map((preset) => <button key={preset.key} className="button button-soft" onClick={() => onItemsChange([...itemConfig, presetConfig(preset.key)])}>＋ {preset.label}</button>)}
+        </div>
+      )}
+      <form className="med-form" onSubmit={addCustom}>
+        <label className="field"><span>自己加项目</span><input value={form.label} placeholder="例如：尿量、腿围" onChange={(event) => setForm({ ...form, label: event.target.value })} /></label>
+        <label className="field"><span>单位</span><input value={form.unit} placeholder="例如：毫升" onChange={(event) => setForm({ ...form, unit: event.target.value })} /></label>
+        <label className="field"><span>低于 / 高于多少提醒</span><span className="range-pair"><input inputMode="decimal" value={form.low} placeholder="可空" onChange={(event) => setForm({ ...form, low: event.target.value })} /><input inputMode="decimal" value={form.high} placeholder="可空" onChange={(event) => setForm({ ...form, high: event.target.value })} /></span></label>
+        <button className="button button-primary" type="submit">添加</button>
+      </form>
+      {formError && <p className="form-error">{formError}</p>}
+    </section>
+  )
+}
+
 function MedList({ meds, slots, onMedsChange }) {
   const [form, setForm] = useState({ name: '', dose: '', times: '08:00' })
   const [formError, setFormError] = useState('')
@@ -319,7 +432,7 @@ function medAdherence(patientId, meds, from, to) {
   }
 }
 
-function buildVisitText({ patient, checkins, records, meds, questions, from, to }) {
+function buildVisitText({ patient, checkins, records, meds, questions, items, measurements, from, to }) {
   const rows = checkins.filter((row) => row.record_date >= from && row.record_date <= to)
   const bp = rows.filter(hasBloodPressure)
   const highest = bp.length ? bp.reduce((a, b) => (Number(b.systolic_mmhg) > Number(a.systolic_mmhg) ? b : a)) : null
@@ -332,6 +445,17 @@ function buildVisitText({ patient, checkins, records, meds, questions, from, to 
   const notes = rows.filter((row) => row.self_report_note && row.recorded_by_type === 'self').slice(0, 5)
   const adherence = medAdherence(patient.patient_id, meds, from, to)
   const periodRecords = records.filter((record) => record.record_date >= from && record.record_date <= to)
+  const inPeriod = measurements.filter((row) => row.record_date >= from && row.record_date <= to)
+  const itemLines = items.filter((item) => item.kind === 'number').map((item) => {
+    const readings = readingsFor(inPeriod, item.key)
+    if (!readings.length) return `• ${item.label}：这段时间没有记录`
+    const values = readings.map((row) => Number(row.value_num))
+    const outside = readings.filter((row) => checkValue(item, row.value_num).outOfRange).length
+    const tagged = item.tags ? `（${item.tags.map((tag) => [tag, readings.filter((row) => row.value_text === tag).length]).filter(([, count]) => count).map(([tag, count]) => `${tag} ${count} 次`).join('，')}）` : ''
+    return `• ${item.label}：记了 ${readings.length} 次${tagged}，最高 ${formatValue(item, Math.max(...values))}，最低 ${formatValue(item, Math.min(...values))}${item.low != null || item.high != null ? `；超出提醒范围（${rangeText(item)}）${outside} 次` : ''}`
+  })
+  const symptoms = symptomCounts(measurements, from, to)
+  const showBp = bp.length > 0 || items.some((item) => item.kind === 'bp')
 
   return [
     `复诊准备：${displayPatientName(patient.display_name)}（${patient.age_years ? `${patient.age_years} 岁` : '年龄未记录'}，编号 ${patient.patient_id}）`,
@@ -341,16 +465,22 @@ function buildVisitText({ patient, checkins, records, meds, questions, from, to 
     '一、老人想问医生的问题',
     ...(questions.length ? questions.map((item, index) => `${index + 1}. ${item.text}`) : ['（这次没有记下问题）']),
     '',
-    '二、血压',
-    bp.length
-      ? `• ${bp.length} 天有完整读数，最高 ${highest.systolic_mmhg}/${highest.diastolic_mmhg}（${monthDay(highest.record_date)}），最低 ${lowest.systolic_mmhg}/${lowest.diastolic_mmhg}（${monthDay(lowest.record_date)}）`
-      : '• 这段时间没有完整血压读数',
-    bp.length ? `• 高压 ≥ ${BP_RULES.highSystolic} 的有 ${highDays} 天` : null,
-    missing ? `• 有 ${missing} 天未测或设备出错，未按 0 计算` : null,
+    '二、每天记的读数',
+    ...(showBp
+      ? [
+          bp.length
+            ? `• 血压：${bp.length} 天有完整读数，最高 ${highest.systolic_mmhg}/${highest.diastolic_mmhg}（${monthDay(highest.record_date)}），最低 ${lowest.systolic_mmhg}/${lowest.diastolic_mmhg}（${monthDay(lowest.record_date)}）；高压 ≥ ${BP_RULES.highSystolic} 的有 ${highDays} 天`
+            : '• 血压：这段时间没有完整读数',
+          bp.length && missing ? `• 有 ${missing} 天未测或设备出错，未按 0 计算` : null,
+        ]
+      : []),
+    ...itemLines,
+    !showBp && !itemLines.length ? '• 没有设置需要测量的项目' : null,
     '',
     '三、睡眠、心情与交流',
     `• 睡眠：${sleep == null ? '未记录' : `平均约 ${sleep.toFixed(1)} 小时`}`,
     `• 心情记为"不太好"的有 ${lowMood} 天；想找人聊聊的有 ${talk} 天`,
+    `• 哪里不舒服：${symptoms.length ? symptoms.map(([symptom, days]) => `${symptom} ${days} 天`).join('、') : '没有记'}`,
     ...notes.map((row) => `• ${monthDay(row.record_date)} 老人原话："${row.self_report_note.replace(/\s+/g, ' ')}"`),
     '',
     '四、用药',
@@ -367,13 +497,13 @@ function buildVisitText({ patient, checkins, records, meds, questions, from, to 
 }
 
 function VisitAndRecords(props) {
-  const { patient, checkins, records, meds, questions, onQuestionsChange, visitDate, onVisitDateChange } = props
+  const { patient, checkins, records, meds, questions, items, measurements, onQuestionsChange, visitDate, onVisitDateChange } = props
   const today = localDate()
   // 默认从上一次就诊记录开始（老人拍照上传的不算）
   const lastVisit = records.find((record) => !isPhotoRecord(record) && record.record_date < today)?.record_date
   const [from, setFrom] = useState(lastVisit || localDate(-30))
   const [edited, setEdited] = useState(null)
-  const draft = useMemo(() => buildVisitText({ patient, checkins, records, meds, questions, from, to: today }), [patient, checkins, records, meds, questions, from, today])
+  const draft = useMemo(() => buildVisitText({ patient, checkins, records, meds, questions, items, measurements, from, to: today }), [patient, checkins, records, meds, questions, items, measurements, from, today])
   const text = edited ?? draft
 
   const copy = async () => {

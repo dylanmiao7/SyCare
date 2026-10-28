@@ -29,7 +29,7 @@ const json = (body: unknown, status = 200) =>
 
 type Med = { name: string; dose?: string; time: string; taken: boolean }
 
-function buildContext(patient: Record<string, any>, checkins: Record<string, any>[], records: Record<string, any>[], meds: Med[]) {
+function buildContext(patient: Record<string, any>, checkins: Record<string, any>[], records: Record<string, any>[], meds: Med[], measurements: Record<string, any>[]) {
   const lines = [
     `称呼：${String(patient.display_name || '').replace(/^模拟\s*/, '')}，${patient.age_years ?? '年龄未记录'} 岁`,
     `既往情况：${patient.history_summary || '未记录'}；过敏：${patient.allergy_status || '未记录'}`,
@@ -39,6 +39,15 @@ function buildContext(patient: Record<string, any>, checkins: Record<string, any
       const bp = row.capture_status === 'recorded' && row.systolic_mmhg != null ? `血压 ${row.systolic_mmhg}/${row.diastolic_mmhg}` : '血压未测'
       return `${row.record_date}：${bp}；脉搏 ${row.pulse_bpm ?? '—'}；睡眠 ${row.sleep_hours ?? '—'} 小时；心情 ${row.mood_response ?? '—'}；想找人聊聊 ${row.wants_to_talk ?? '—'}${row.self_report_note ? `；原话"${String(row.self_report_note).slice(0, 80)}"` : ''}`
     }),
+    '',
+    '家属或医生设置的其他记录项目，和老人说的哪里不舒服：',
+    ...(measurements.length
+      ? measurements.map((row) =>
+          row.value_num != null
+            ? `${row.record_date}：${row.item_label} ${row.value_num} ${row.unit || ''}${row.value_text ? `（${row.value_text}）` : ''}`
+            : `${row.record_date}：${row.item_label}：${row.value_text || ''}`,
+        )
+      : ['（没有）']),
     '',
     '病历：',
     ...(records.length
@@ -75,14 +84,16 @@ Deno.serve(async (req) => {
   const meds = Array.isArray(body.meds) ? body.meds.slice(0, 10) : []
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-  const [patientResult, checkinResult, recordResult] = await Promise.all([
+  const since = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)
+  const [patientResult, checkinResult, recordResult, measurementResult] = await Promise.all([
     supabase.from('patients').select('*').eq('patient_id', patientId).single(),
     supabase.from('daily_checkins').select('*').eq('patient_id', patientId).order('record_date', { ascending: false }).limit(14),
     supabase.from('medical_records').select('*').eq('patient_id', patientId).order('record_date', { ascending: false }).limit(5),
+    supabase.from('measurements').select('*').eq('patient_id', patientId).gte('record_date', since).order('record_date', { ascending: false }).limit(60),
   ])
   if (patientResult.error) return json({ error: '找不到这位老人' }, 404)
 
-  const context = buildContext(patientResult.data, checkinResult.data || [], recordResult.data || [], meds)
+  const context = buildContext(patientResult.data, checkinResult.data || [], recordResult.data || [], meds, measurementResult.data || [])
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 25000)

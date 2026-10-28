@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import AssistantAvatar from './AssistantAvatar'
-import { ASSISTANT_NAME, BP_RULES, SAFETY_TEXT, describeFields, interpret } from '../lib/assistant'
+import { ASSISTANT_NAME, SAFETY_TEXT, describeFields, interpret, safetyAfterSave } from '../lib/assistant'
 import { hasBloodPressure, localDate, monthDay } from '../lib/format'
 import { compressImage } from '../lib/records'
 import { askAI } from '../lib/ai'
@@ -22,7 +22,7 @@ let messageId = 0
 const aiMessage = (text, extra = {}) => ({ id: ++messageId, from: 'ai', text, ...extra })
 const myMessage = (text, extra = {}) => ({ id: ++messageId, from: 'me', text, ...extra })
 
-export default function ElderChat({ patient, context, opening, smsEnabled, onClose, onSaveCheckin, onMedsTaken, onSavePhoto, onAddDoctorQuestion }) {
+export default function ElderChat({ patient, context, opening, smsEnabled, onClose, onSaveEntry, onMedsTaken, onSavePhoto, onAddDoctorQuestion }) {
   const [messages, setMessages] = useState(() => [aiMessage(opening.text)])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -47,7 +47,7 @@ export default function ElderChat({ patient, context, opening, smsEnabled, onClo
   const closeActions = (id) => setMessages((current) => current.map((message) => (message.id === id ? { ...message, done: true } : message)))
 
   function followUp(merged) {
-    if (!hasBloodPressure(merged)) return '量了血压也可以告诉我。'
+    if (context.items.some((item) => item.kind === 'bp') && !hasBloodPressure(merged)) return '量了血压也可以告诉我。'
     if (!merged.mood_response) return '今天心情怎么样？'
     return '还有什么想说的，随时告诉我。'
   }
@@ -87,8 +87,8 @@ export default function ElderChat({ patient, context, opening, smsEnabled, onClo
         startPhoto()
         break
       case 'record': {
-        const summary = describeFields(action.fields)
-        setPendingRecord(action.fields)
+        const summary = describeFields(action.fields, action.measures, action.symptoms)
+        setPendingRecord(action)
         if (action.check.implausible) {
           add(aiMessage(`${SAFETY_TEXT.implausible}我听到的是：${summary}。`, {
             tone: 'caution',
@@ -117,18 +117,17 @@ export default function ElderChat({ patient, context, opening, smsEnabled, onClo
   async function confirmRecord() {
     if (!pendingRecord) return
     setBusy(true)
-    const error = await onSaveCheckin(pendingRecord)
+    const error = await onSaveEntry(pendingRecord)
     setBusy(false)
     if (error) {
       add(aiMessage(`没有保存成功，请检查一下网络再试一次。（${error.message}）`, { tone: 'caution' }))
       return
     }
-    const sys = pendingRecord.systolic_mmhg
-    const dia = pendingRecord.diastolic_mmhg
-    const merged = { ...context.todayRow, ...pendingRecord, capture_status: sys != null ? 'recorded' : context.todayRow?.capture_status }
+    const { fields, measures } = pendingRecord
+    const merged = { ...context.todayRow, ...fields, capture_status: fields.systolic_mmhg != null ? 'recorded' : context.todayRow?.capture_status }
     setPendingRecord(null)
-    if (sys != null && (sys >= BP_RULES.urgentSystolic || dia >= BP_RULES.urgentDiastolic)) add(aiMessage(`记好了。${SAFETY_TEXT.urgent}`, { tone: 'urgent' }))
-    else if (sys != null && sys < BP_RULES.lowSystolic) add(aiMessage(`记好了。${SAFETY_TEXT.low}`, { tone: 'caution' }))
+    const safety = safetyAfterSave(fields, measures)
+    if (safety) add(aiMessage(`记好了。${safety.text}`, { tone: safety.tone }))
     else add(aiMessage(`记好了，谢谢您。${followUp(merged)}`))
   }
 
@@ -288,7 +287,10 @@ export default function ElderChat({ patient, context, opening, smsEnabled, onClo
         <div className="chat-shortcuts">
           <button onClick={startPhoto}>📷 拍病历</button>
           <button onClick={() => setInput('我想问医生：')}>记下想问医生的</button>
-          <button onClick={() => handleSend('我最近血压怎么样？')}>最近血压怎么样</button>
+          {(() => {
+            const topic = context.items.find((item) => item.kind === 'bp' || !item.custom)?.label || '睡眠'
+            return <button onClick={() => handleSend(`我最近${topic}怎么样？`)}>最近{topic}怎么样</button>
+          })()}
         </div>
         <form className="chat-form" onSubmit={(event) => { event.preventDefault(); handleSend() }}>
           {SpeechRecognition && (

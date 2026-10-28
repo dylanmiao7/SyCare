@@ -1,5 +1,7 @@
-// 演示版：用药清单、打卡、复诊日期、想问医生的问题、病历照片和短信设置
+// 演示版：用药清单、记录项目设置、打卡、复诊日期、想问医生的问题、病历照片和短信设置
 // 只保存在这台设备的浏览器里。正式版需要放进数据库。
+
+import { defaultItems } from './items'
 
 const PREFIX = 'sycare:'
 
@@ -53,6 +55,15 @@ export function medSlots(meds) {
   return meds
     .flatMap((med) => (med.times || []).map((time) => ({ id: `${med.id}@${time}`, time, med })))
     .sort((a, b) => a.time.localeCompare(b.time))
+}
+
+// 每天要记的项目 —— 只在家属模式里设置
+export function getItemConfig(patient) {
+  return read(`items:${patient.patient_id}`, null) ?? defaultItems(patient)
+}
+
+export function saveItemConfig(patientId, config) {
+  return write(`items:${patientId}`, config)
 }
 
 export function getVisitDate(patientId) {

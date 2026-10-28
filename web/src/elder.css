@@ -15,7 +15,7 @@
   color: var(--elder-ink);
 }
 
-.elder-shell { min-height: 100vh; background: var(--elder-bg); padding-bottom: 72px; }
+.elder-shell { min-height: 100vh; background: var(--elder-bg); padding-bottom: 150px; }
 .elder-status { display: grid; place-content: center; justify-items: center; gap: 16px; min-height: 100vh; padding: 24px; background: var(--elder-bg); text-align: center; }
 
 .elder-home { width: min(560px, 100%); margin: 0 auto; padding: 20px 16px 40px; }
@@ -40,7 +40,9 @@
 .med-button.taken .med-state { background: transparent; color: var(--elder-green); }
 
 .today-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.today-item { padding: 14px 16px; border-radius: 16px; background: #faf8f3; }
+.today-item { padding: 14px 16px; border: 2px solid transparent; border-radius: 16px; background: #faf8f3; color: var(--elder-ink); text-align: left; }
+.today-item.empty { border: 2px dashed #cfc6b4; }
+.today-item.empty strong { color: var(--elder-green); font-size: 21px; }
 .today-item span { display: block; color: var(--elder-muted); font-size: 18px; }
 .today-item strong { display: block; font-size: 26px; }
 .mood-question { margin: 18px 0 10px; font-weight: 600; }
@@ -73,6 +75,51 @@
 .demo-bar { position: fixed; z-index: 5; inset: auto 0 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--elder-line); background: #efeae0; color: #6a6355; font-size: 14px; }
 .demo-bar label { display: flex; align-items: center; gap: 8px; }
 .demo-bar select { max-width: 150px; padding: 4px 6px; border: 1px solid #d6cfbf; border-radius: 8px; background: #fff; font-size: 14px; }
+
+/* 哪里不舒服 */
+.symptom-today { margin: -6px 0 12px; color: var(--elder-green); font-weight: 600; }
+.symptom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.symptom-chip { min-height: 56px; border: 2px solid var(--elder-line); border-radius: 16px; background: #fffdf9; color: var(--elder-ink); font-size: 19px; }
+.symptom-chip.selected { border-color: var(--elder-green); background: var(--elder-green-soft); font-weight: 700; }
+.emergency-note { margin: 14px 0 0; padding: 12px 14px; border-radius: 14px; background: var(--elder-red-soft); color: var(--elder-red); font-size: 17px; font-weight: 600; }
+
+/* 首页直接填写 */
+.record-sheet form { display: grid; gap: 14px; }
+.record-sheet .elder-secondary { margin-top: 0; text-align: center; }
+.sheet-hint { margin: -6px 0 0; color: var(--elder-muted); font-size: 17px; }
+.big-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.big-fields.single { grid-template-columns: 1fr; }
+.big-fields label span { display: block; color: var(--elder-muted); font-size: 18px; }
+.big-fields small { font-size: 14px; }
+.big-fields input { width: 100%; min-height: 72px; padding: 0 12px; border: 2px solid var(--elder-line); border-radius: 16px; font-size: 34px; font-weight: 700; text-align: center; }
+.big-fields input:focus { border-color: var(--elder-green); outline: 0; }
+.stepper { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.stepper button { width: 80px; height: 80px; border: 2px solid var(--elder-green); border-radius: 50%; background: #fff; color: var(--elder-green); font-size: 40px; font-weight: 700; }
+.stepper strong { font-size: 44px; }
+.stepper strong small { font-size: 22px; }
+.tag-row { display: flex; gap: 8px; }
+.tag-row button { flex: 1; min-height: 52px; border: 2px solid var(--elder-line); border-radius: 14px; background: #fffdf9; color: var(--elder-ink); font-size: 18px; }
+.tag-row button.selected { border-color: var(--elder-green); background: var(--elder-green-soft); font-weight: 700; }
+.sheet-safety { margin: 0; padding: 14px; border-radius: 14px; font-size: 19px; }
+.sheet-safety.caution { background: var(--elder-amber-soft); }
+.sheet-safety.urgent { background: var(--elder-red-soft); color: var(--elder-red); font-weight: 600; }
+
+/* 底部导航：今天 / 我的记录 / 问小安 */
+.elder-tabs { position: fixed; z-index: 6; inset: auto 0 45px; display: grid; grid-template-columns: repeat(3, 1fr); width: min(560px, 100%); margin: 0 auto; padding: 6px; border-top: 1px solid var(--elder-line); background: #fff; }
+.elder-tabs button { display: grid; justify-items: center; gap: 0; min-height: 60px; border: 0; border-radius: 14px; background: none; color: var(--elder-muted); font-size: 18px; font-weight: 600; }
+.elder-tabs button span { font-size: 22px; line-height: 1.2; }
+.elder-tabs button.active { background: var(--elder-green-soft); color: var(--elder-green); }
+
+/* 我的记录 */
+.history-header { margin-bottom: 16px; }
+.history-header h1 { margin: 0; font-size: 28px; }
+.history-header p { margin: 4px 0 0; color: var(--elder-muted); }
+.history-day h2 small { margin-left: 10px; color: var(--elder-muted); font-size: 17px; font-weight: 400; }
+.history-day dl { margin: 0; }
+.history-day dl div { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-bottom: 1px solid #f0ebe1; }
+.history-day dl div:last-child { border-bottom: 0; }
+.history-day dt { color: var(--elder-muted); flex: 0 0 auto; }
+.history-day dd { margin: 0; font-weight: 700; text-align: right; }
 
 /* 全屏对话 */
 .chat-screen { position: fixed; z-index: 40; inset: 0; display: flex; flex-direction: column; background: var(--elder-bg); }
@@ -113,4 +160,5 @@
   .elder-shell, .chat-screen { font-size: 19px; }
   .assistant-bubble { font-size: 19px; }
   .today-grid { grid-template-columns: 1fr; }
+  .big-fields { grid-template-columns: 1fr 1fr; }
 }

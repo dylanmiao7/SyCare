@@ -419,3 +419,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .outbox { margin-top: 12px; }
 .outbox summary { cursor: pointer; color: #4d5d53; font-size: 12px; font-weight: 700; }
 @media (max-width: 720px) { .section-heading { flex-direction: column; align-items: stretch; } }
+
+/* 记录项目 */
+.item-summary, .item-settings { margin-top: 15px; }
+.symptom-summary { margin: 14px 0 0; color: #4d5d53; font-size: 13px; }
+.range-input { width: 90px; padding: 6px 8px; border: 1px solid #dfe5df; border-radius: 8px; font-size: 13px; }
+.range-pair { display: flex; gap: 6px; }
+.range-pair input { min-width: 0; }
+.preset-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; color: #6f7b73; font-size: 12px; }

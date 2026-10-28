@@ -1,23 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { displayPatientName, localDate } from './lib/format'
-import { openingLine } from './lib/assistant'
+import { ASSISTANT_NAME, openingLine } from './lib/assistant'
 import {
-  getDoctorQuestions, getMedLog, getMedications, getSmsOutbox, getSmsSettings, getVisitDate, medSlots, queueSms,
-  saveDoctorQuestions, saveMedications, savePhoto, saveSmsSettings, saveVisitDate, setMedTaken,
+  getDoctorQuestions, getItemConfig, getMedLog, getMedications, getSmsOutbox, getSmsSettings, getVisitDate, medSlots, queueSms,
+  saveDoctorQuestions, saveItemConfig, saveMedications, savePhoto, saveSmsSettings, saveVisitDate, setMedTaken,
 } from './lib/localStore'
-import { markRecordVerified, savePhotoRecord, saveTextRecord, saveTodayCheckin } from './lib/records'
+import { markRecordVerified, saveMeasurement, savePhotoRecord, saveTextRecord, saveTodayCheckin } from './lib/records'
+import { SYMPTOM_KEY, resolveItems } from './lib/items'
 import ElderHome from './elder/ElderHome'
+import ElderHistory from './elder/ElderHistory'
 import ElderChat from './elder/ElderChat'
 import FamilyMode from './family/FamilyMode'
 
 function App() {
   const [mode, setMode] = useState('elder')
   const [chatOpen, setChatOpen] = useState(false)
+  const [elderPage, setElderPage] = useState('today')
   const [patients, setPatients] = useState([])
   const [patientId, setPatientId] = useState('')
   const [checkins, setCheckins] = useState([])
   const [records, setRecords] = useState([])
+  const [measurements, setMeasurements] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -25,6 +29,7 @@ function App() {
 
   // 演示版保存在本机浏览器里的内容
   const [meds, setMeds] = useState([])
+  const [itemConfig, setItemConfig] = useState([])
   const [medLog, setMedLog] = useState({})
   const [visitDate, setVisitDate] = useState('')
   const [questions, setQuestions] = useState([])
@@ -34,6 +39,7 @@ function App() {
   const today = localDate()
   const patient = useMemo(() => patients.find((item) => item.patient_id === patientId) || null, [patients, patientId])
   const todayRow = useMemo(() => checkins.find((row) => row.record_date === today) || null, [checkins, today])
+  const items = useMemo(() => resolveItems(itemConfig), [itemConfig])
   const slots = useMemo(() => medSlots(meds).map((slot) => ({ ...slot, taken: Boolean(medLog[slot.id]) })), [meds, medLog])
 
   const loadPatients = useCallback(async () => {
@@ -51,9 +57,11 @@ function App() {
 
   const loadPatientData = useCallback(async (id) => {
     if (!id || !supabase) return
-    const [checkinResult, recordResult] = await Promise.all([
+    const [checkinResult, recordResult, measurementResult] = await Promise.all([
       supabase.from('daily_checkins').select('*').eq('patient_id', id).order('record_date', { ascending: false }),
       supabase.from('medical_records').select('*').eq('patient_id', id).order('record_date', { ascending: false }),
+      supabase.from('measurements').select('*').eq('patient_id', id)
+        .order('record_date', { ascending: false }).order('created_at', { ascending: false }).limit(300),
     ])
     if (checkinResult.error || recordResult.error) {
       setError(`读取${checkinResult.error ? '健康记录' : '病历'}失败：${(checkinResult.error || recordResult.error).message}`)
@@ -61,6 +69,9 @@ function App() {
     }
     setCheckins(checkinResult.data || [])
     setRecords(recordResult.data || [])
+    // measurements 表还没建好时不影响其他功能
+    if (measurementResult.error) console.warn('读取其他记录项目失败：', measurementResult.error.message)
+    setMeasurements(measurementResult.data || [])
   }, [])
 
   useEffect(() => { loadPatients() }, [loadPatients])
@@ -69,6 +80,7 @@ function App() {
   useEffect(() => {
     if (!patient) return
     setMeds(getMedications(patient))
+    setItemConfig(getItemConfig(patient))
     setMedLog(getMedLog(patient.patient_id, today))
     setVisitDate(getVisitDate(patient.patient_id))
     setQuestions(getDoctorQuestions(patient.patient_id))
@@ -77,8 +89,8 @@ function App() {
   }, [patient, today])
 
   const opening = useMemo(
-    () => (patient ? openingLine({ patient, todayRow, slots, visitDate, questions, today }) : { bubble: '', text: '' }),
-    [patient, todayRow, slots, visitDate, questions, today],
+    () => (patient ? openingLine({ patient, todayRow, slots, visitDate, questions, today, items, measurements }) : { bubble: '', text: '' }),
+    [patient, todayRow, slots, visitDate, questions, today, items, measurements],
   )
 
   const clearAlerts = () => { setError(''); setNotice('') }
@@ -86,6 +98,7 @@ function App() {
   function changePatient(id) {
     setPatientId(id)
     setChatOpen(false)
+    setElderPage('today')
     clearAlerts()
   }
 
@@ -106,16 +119,26 @@ function App() {
     return targets.map((slot) => `${slot.time} ${slot.med.name}`)
   }
 
-  async function saveCheckin(fields) {
+  // 首页直接填写和跟小安说，都走这里保存。
+  // 血压、睡眠、心情存每日记录；其他项目和"哪里不舒服"每次存一行
+  async function saveEntry({ fields = {}, measures = [], symptoms = [] }) {
     setSaving(true)
-    const saveError = await saveTodayCheckin(patient, todayRow, fields)
+    let saveError = null
+    if (Object.keys(fields).length) saveError = await saveTodayCheckin(patient, todayRow, fields)
+    for (const { item, value, tag } of measures) {
+      if (saveError) break
+      saveError = await saveMeasurement(patient, { key: item.key, label: item.label, unit: item.unit, value, text: tag || null })
+    }
+    if (!saveError && symptoms.length) {
+      saveError = await saveMeasurement(patient, { key: SYMPTOM_KEY, label: '哪里不舒服', text: symptoms.join('、') })
+    }
     setSaving(false)
-    if (!saveError) await loadPatientData(patient.patient_id)
+    await loadPatientData(patient.patient_id)
     return saveError
   }
 
   async function setMood(value) {
-    const saveError = await saveCheckin({ mood_response: value })
+    const saveError = await saveEntry({ fields: { mood_response: value } })
     if (saveError) setError(`心情没有保存成功：${saveError.message}`)
   }
 
@@ -167,6 +190,12 @@ function App() {
     setNotice('用药清单已更新，老人首页会同步显示。')
   }
 
+  function changeItems(next) {
+    saveItemConfig(patient.patient_id, next)
+    setItemConfig(next)
+    setNotice('记录项目已更新，老人首页会同步显示。')
+  }
+
   function changeVisitDate(date) {
     saveVisitDate(patient.patient_id, date)
     setVisitDate(date)
@@ -214,6 +243,10 @@ function App() {
         onAddTextRecord={addTextRecord}
         meds={meds}
         slots={slots}
+        items={items}
+        itemConfig={itemConfig}
+        onItemsChange={changeItems}
+        measurements={measurements}
         onMedsChange={changeMeds}
         visitDate={visitDate}
         onVisitDateChange={changeVisitDate}
@@ -231,17 +264,29 @@ function App() {
     <div className="elder-shell">
       {error && <div className="elder-alert" role="alert">{error}<button onClick={clearAlerts} aria-label="关闭提示">×</button></div>}
       {notice && <div className="elder-alert ok" role="status">{notice}<button onClick={clearAlerts} aria-label="关闭提示">×</button></div>}
-      <ElderHome
-        patient={patient}
-        todayRow={todayRow}
-        slots={slots}
-        opening={opening}
-        saving={saving}
-        onToggleMed={toggleMed}
-        onSetMood={setMood}
-        onOpenChat={() => setChatOpen(true)}
-        onOpenFamily={() => { setMode('family'); setChatOpen(false) }}
-      />
+      {elderPage === 'today' ? (
+        <ElderHome
+          patient={patient}
+          todayRow={todayRow}
+          slots={slots}
+          items={items}
+          measurements={measurements}
+          opening={opening}
+          saving={saving}
+          onToggleMed={toggleMed}
+          onSetMood={setMood}
+          onSave={saveEntry}
+          onOpenChat={() => setChatOpen(true)}
+          onOpenFamily={() => { setMode('family'); setChatOpen(false) }}
+        />
+      ) : (
+        <ElderHistory checkins={checkins} items={items} measurements={measurements} />
+      )}
+      <nav className="elder-tabs" aria-label="老人模式导航">
+        <button className={elderPage === 'today' ? 'active' : ''} onClick={() => setElderPage('today')}><span aria-hidden="true">☀</span>今天</button>
+        <button className={elderPage === 'history' ? 'active' : ''} onClick={() => setElderPage('history')}><span aria-hidden="true">▤</span>我的记录</button>
+        <button onClick={() => setChatOpen(true)}><span aria-hidden="true">💬</span>问{ASSISTANT_NAME}</button>
+      </nav>
       <footer className="demo-bar">
         <span>课堂演示 · 只用模拟资料</span>
         <label>
@@ -255,11 +300,11 @@ function App() {
         <ElderChat
           key={patientId}
           patient={patient}
-          context={{ patient, checkins, records, todayRow, slots }}
+          context={{ patient, checkins, records, todayRow, slots, items, measurements }}
           opening={opening}
           smsEnabled={sms.notifyFamily}
           onClose={() => setChatOpen(false)}
-          onSaveCheckin={saveCheckin}
+          onSaveEntry={saveEntry}
           onMedsTaken={markDueMedsTaken}
           onSavePhoto={savePhotoUpload}
           onAddDoctorQuestion={addDoctorQuestion}

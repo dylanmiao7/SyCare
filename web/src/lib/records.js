@@ -37,6 +37,23 @@ export async function saveTodayCheckin(patient, existing, fields) {
   return error
 }
 
+// 血糖、体重等项目和"哪里不舒服"：每次一行，存进 measurements 表
+export async function saveMeasurement(patient, { key, label, unit = null, value = null, text = null }) {
+  const { error } = await supabase.from('measurements').insert({
+    measurement_id: `MEA-${crypto.randomUUID()}`,
+    patient_id: patient.patient_id,
+    record_date: localDate(),
+    item_key: key,
+    item_label: label,
+    value_num: value,
+    value_text: text,
+    unit,
+    recorded_by_type: 'self',
+    is_synthetic: true,
+  })
+  return error
+}
+
 export async function savePhotoRecord(patient, { recordType, recordDate }) {
   const row = {
     record_id: `REC-${crypto.randomUUID()}`,
