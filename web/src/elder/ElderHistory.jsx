@@ -44,7 +44,7 @@ export default function ElderHistory({ checkins, items, measurements, onOpenFami
       })}
       <section className="caregiver-entry">
         <p>家人或医生要查看、设置时，请他们点这里。</p>
-        <button onClick={onOpenFamily}>照护模式（家人和医生用）›</button>
+        <button onClick={onOpenFamily}>照护模式 ›</button>
       </section>
     </div>
   )

@@ -13,62 +13,37 @@ const NAV_ITEMS = [
   { id: 'visit', label: '复诊病历', icon: '▤' },
 ]
 
+// 照护模式和老人模式在同一台手机上：同样的窄屏页面，底部两个按钮切换
 export default function FamilyMode(props) {
   const [unlocked, setUnlocked] = useState(false)
   const [section, setSection] = useState('daily')
-  const { patient, patients, patientId, onPatientChange, onExit, error, notice, clearAlerts } = props
+  const { patient, onExit, error, notice, clearAlerts } = props
 
   if (!unlocked) return <PinGate onUnlock={() => setUnlocked(true)} onExit={onExit} />
 
-  const navLabel = NAV_ITEMS.find((item) => item.id === section)?.label
-
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark">S</span>
-          <span><strong>SyCare</strong><small>照护模式</small></span>
-        </div>
-        <div className="sidebar-label">家人和医护用</div>
-        <nav className="main-nav" aria-label="照护模式导航">
-          {NAV_ITEMS.map((item) => (
-            <button key={item.id} className={`nav-item ${section === item.id ? 'active' : ''}`} onClick={() => { setSection(item.id); clearAlerts() }}>
-              <span className="nav-icon" aria-hidden="true">{item.icon}</span><span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-spacer" />
-        <button className="button button-outline exit-family" onClick={onExit}>‹ 回到老人模式</button>
-        <div className="sidebar-note">
-          <span className="note-icon">✦</span>
-          <strong>课堂体验</strong>
-          <p>当前展示的是示例资料，仅供体验。请勿填写真实姓名、病历或健康信息。</p>
-        </div>
-      </aside>
+    <div className="care-shell">
+      <header className="care-header">
+        <button className="care-back" onClick={onExit}>‹ 老人模式</button>
+        <strong>照护模式</strong>
+        <span>{displayPatientName(patient.display_name)}</span>
+      </header>
 
-      <main className="main-area">
-        <header className="topbar">
-          <div className="breadcrumb"><span>照护模式</span><span className="crumb-divider">/</span><strong>{navLabel}</strong></div>
-          <div className="topbar-actions">
-            <label className="patient-picker">
-              <span className="sr-only">演示：切换长辈</span>
-              <span className="avatar">{patient.display_name?.slice(-1) || '长'}</span>
-              <select value={patientId} onChange={(event) => onPatientChange(event.target.value)}>
-                {patients.map((item) => <option key={item.patient_id} value={item.patient_id}>{displayPatientName(item.display_name)}</option>)}
-              </select>
-              <span className="chevron">⌄</span>
-            </label>
-          </div>
-        </header>
-
-        <div className="page-wrap">
-          {error && <div className="alert alert-error" role="alert"><span>!</span><div>{error}</div><button aria-label="关闭提示" onClick={clearAlerts}>×</button></div>}
-          {notice && <div className="alert alert-success" role="status"><span>✓</span><div>{notice}</div><button aria-label="关闭提示" onClick={clearAlerts}>×</button></div>}
-          {section === 'daily' && <Daily {...props} />}
-          {section === 'visit' && <VisitAndRecords {...props} />}
-          <footer className="page-footer"><span>SyCare · 体验版</span><span>记录帮助日常沟通，不用于诊断或治疗决策。</span></footer>
-        </div>
+      <main className="care-page">
+        {error && <div className="alert alert-error" role="alert"><span>!</span><div>{error}</div><button aria-label="关闭提示" onClick={clearAlerts}>×</button></div>}
+        {notice && <div className="alert alert-success" role="status"><span>✓</span><div>{notice}</div><button aria-label="关闭提示" onClick={clearAlerts}>×</button></div>}
+        {section === 'daily' && <Daily {...props} />}
+        {section === 'visit' && <VisitAndRecords {...props} />}
+        <footer className="page-footer"><span>课堂体验 · 只用模拟资料</span><span>记录帮助日常沟通，不用于诊断或治疗决策。</span></footer>
       </main>
+
+      <nav className="care-tabs" aria-label="照护模式导航">
+        {NAV_ITEMS.map((item) => (
+          <button key={item.id} className={section === item.id ? 'active' : ''} onClick={() => { setSection(item.id); clearAlerts(); window.scrollTo(0, 0) }}>
+            <span aria-hidden="true">{item.icon}</span>{item.label}
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }
@@ -277,7 +252,7 @@ function ItemSummary({ items, measurements }) {
       {numberItems.length > 0 && (
         <div className="table-scroll">
           <table className="data-table">
-            <thead><tr><th>项目</th><th>最近一次</th><th>7 天内记了</th><th>超出提醒范围</th></tr></thead>
+            <thead><tr><th>项目</th><th>最近一次</th><th>7 天</th><th>超出范围</th></tr></thead>
             <tbody>
               {numberItems.map((item) => {
                 const rows = readingsFor(measurements, item.key)
@@ -285,8 +260,8 @@ function ItemSummary({ items, measurements }) {
                 const outside = week.filter((row) => checkValue(item, row.value_num).outOfRange).length
                 return (
                   <tr key={item.key}>
-                    <td><strong>{item.label}</strong><small className="muted"> {rangeText(item)}</small></td>
-                    <td>{rows[0] ? `${formatValue(item, rows[0].value_num)}${rows[0].value_text ? `（${rows[0].value_text}）` : ''} · ${monthDay(rows[0].record_date)}` : <span className="muted">还没有</span>}</td>
+                    <td><strong>{item.label}</strong><small className="muted item-range">{rangeText(item)}</small></td>
+                    <td>{rows[0] ? <>{formatValue(item, rows[0].value_num)}{rows[0].value_text ? `（${rows[0].value_text}）` : ''}<small className="muted item-range">{monthDay(rows[0].record_date)}</small></> : <span className="muted">还没有</span>}</td>
                     <td>{week.length} 次</td>
                     <td>{outside ? <span className="dose-chip">{outside} 次</span> : '—'}</td>
                   </tr>

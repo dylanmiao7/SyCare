@@ -437,3 +437,54 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .ask-answer { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: #f6f8f6; }
 .ask-answer strong { color: #304037; font-size: 13px; }
 .ask-answer p { margin: 6px 0 0; color: #3c4a41; font-size: 14px; line-height: 1.7; }
+
+/* 照护模式：和老人模式在同一台手机上，用同样的窄屏页面 */
+.care-shell { min-height: 100vh; padding-bottom: 84px; background: #f7f4ee; }
+.care-header { position: sticky; z-index: 5; top: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; width: min(560px, 100%); margin: 0 auto; padding: 10px 16px; border-bottom: 1px solid #e3ddd2; background: #fff; }
+.care-header strong { font-size: 17px; }
+.care-header > span { justify-self: end; color: #56635a; font-size: 14px; }
+.care-back { justify-self: start; padding: 8px 12px; border: 1px solid #e3ddd2; border-radius: 12px; background: #fff; color: #1f2b24; font-size: 15px; font-weight: 600; }
+.care-page { width: min(560px, 100%); margin: 0 auto; padding: 20px 16px 24px; font-size: 14px; }
+.care-tabs { position: fixed; z-index: 6; inset: auto 0 0; display: grid; grid-template-columns: repeat(2, 1fr); width: min(560px, 100%); margin: 0 auto; padding: 6px; border-top: 1px solid #e3ddd2; background: #fff; }
+.care-tabs button { display: grid; justify-items: center; min-height: 58px; border: 0; border-radius: 14px; background: none; color: #56635a; font-size: 16px; font-weight: 600; }
+.care-tabs button span { font-size: 20px; line-height: 1.2; }
+.care-tabs button.active { background: #e4f2e9; color: #1f7652; }
+.pin-screen { background: #f7f4ee; }
+
+/* 窄屏排版：照护模式始终按手机宽度显示 */
+.care-page .page-heading { align-items: flex-start; flex-direction: column; margin-bottom: 18px; }
+.care-page .page-heading h1 { font-size: 24px; }
+.care-page .page-heading p { font-size: 13px; }
+.care-page .page-heading > .button { align-self: stretch; }
+.care-page .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-bottom: 13px; }
+.care-page .stat-card { min-height: 112px; padding: 12px; }
+.care-page .stat-value { font-size: 20px; }
+.care-page .stat-foot { font-size: 11px; }
+.care-page .panel { padding: 15px; border-radius: 14px; }
+.care-page .panel-heading h2 { font-size: 16px; }
+.care-page .panel-heading p, .care-page .visit-panel p, .care-page .section-heading p { font-size: 12px; line-height: 1.6; }
+.care-page .chart-panel { min-height: auto; }
+.care-page .table-scroll { margin: 0 -6px; }
+.care-page .data-table th, .care-page .data-table td { padding: 10px 7px; font-size: 13px; }
+.care-page .med-form { grid-template-columns: 1fr 1fr; }
+.care-page .form-grid { grid-template-columns: 1fr; }
+.care-page .field-wide { grid-column: auto; }
+.care-page .form-actions { flex-direction: column; align-items: stretch; }
+.care-page .section-heading { flex-direction: column; align-items: stretch; }
+.care-page .summary-toolbar { flex-wrap: wrap; gap: 8px; font-size: 12px; }
+.care-page .summary-paper-head { align-items: flex-start; flex-wrap: wrap; }
+.care-page .paper-date { width: 100%; margin: 0 0 0 48px; }
+.care-page .summary-panel textarea { min-height: 420px; font-size: 13px; }
+.care-page .detail-pair { font-size: 13px; }
+.care-page .reminder-copy { font-size: 13px; }
+.care-page .verify-row { flex-direction: column; align-items: flex-start; }
+.care-page .timeline-card { grid-template-columns: 44px 12px minmax(0, 1fr); gap: 7px; }
+.care-page .page-footer { flex-direction: column; gap: 4px; font-size: 11px; }
+.care-page .ask-form { flex-wrap: wrap; }
+.care-page .ask-form .button { flex: 1 0 auto; }
+.care-page .tab-row button { font-size: 14px; }
+@media print {
+  .care-header, .care-tabs { display: none !important; }
+  .care-shell { padding: 0; background: #fff; }
+}
+.item-range { display: block; margin-top: 2px; font-size: 11px; }
