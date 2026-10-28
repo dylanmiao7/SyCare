@@ -23,7 +23,7 @@ function write(key, value) {
   }
 }
 
-// 用药清单 —— 只在家属模式里修改
+// 用药清单 —— 只在照护模式里修改
 export function getMedications(patient) {
   const saved = read(`meds:${patient.patient_id}`, null)
   if (saved) return saved
@@ -57,7 +57,7 @@ export function medSlots(meds) {
     .sort((a, b) => a.time.localeCompare(b.time))
 }
 
-// 每天要记的项目 —— 只在家属模式里设置
+// 每天要记的项目 —— 只在照护模式里设置
 export function getItemConfig(patient) {
   return read(`items:${patient.patient_id}`, null) ?? defaultItems(patient)
 }

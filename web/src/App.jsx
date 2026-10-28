@@ -15,7 +15,8 @@ import FamilyMode from './family/FamilyMode'
 
 function App() {
   const [mode, setMode] = useState('elder')
-  const [chatOpen, setChatOpen] = useState(false)
+  // 老人端三个页面：问小安 / 今天 / 我的记录。对话第一次打开后一直保留，切换页面不丢
+  const [chatStarted, setChatStarted] = useState(false)
   const [elderPage, setElderPage] = useState('today')
   const [patients, setPatients] = useState([])
   const [patientId, setPatientId] = useState('')
@@ -95,9 +96,14 @@ function App() {
 
   const clearAlerts = () => { setError(''); setNotice('') }
 
+  function openChat() {
+    setChatStarted(true)
+    setElderPage('chat')
+  }
+
   function changePatient(id) {
     setPatientId(id)
-    setChatOpen(false)
+    setChatStarted(false)
     setElderPage('today')
     clearAlerts()
   }
@@ -264,7 +270,7 @@ function App() {
     <div className="elder-shell">
       {error && <div className="elder-alert" role="alert">{error}<button onClick={clearAlerts} aria-label="关闭提示">×</button></div>}
       {notice && <div className="elder-alert ok" role="status">{notice}<button onClick={clearAlerts} aria-label="关闭提示">×</button></div>}
-      {elderPage === 'today' ? (
+      {elderPage === 'today' && (
         <ElderHome
           patient={patient}
           todayRow={todayRow}
@@ -276,16 +282,30 @@ function App() {
           onToggleMed={toggleMed}
           onSetMood={setMood}
           onSave={saveEntry}
-          onOpenChat={() => setChatOpen(true)}
-          onOpenFamily={() => { setMode('family'); setChatOpen(false) }}
+          onOpenChat={openChat}
         />
-      ) : (
-        <ElderHistory checkins={checkins} items={items} measurements={measurements} />
+      )}
+      {elderPage === 'history' && (
+        <ElderHistory checkins={checkins} items={items} measurements={measurements} onOpenFamily={() => setMode('family')} />
+      )}
+      {chatStarted && (
+        <ElderChat
+          key={patientId}
+          hidden={elderPage !== 'chat'}
+          patient={patient}
+          context={{ patient, checkins, records, todayRow, slots, items, measurements }}
+          opening={opening}
+          smsEnabled={sms.notifyFamily}
+          onSaveEntry={saveEntry}
+          onMedsTaken={markDueMedsTaken}
+          onSavePhoto={savePhotoUpload}
+          onAddDoctorQuestion={addDoctorQuestion}
+        />
       )}
       <nav className="elder-tabs" aria-label="老人模式导航">
+        <button className={elderPage === 'chat' ? 'active' : ''} onClick={openChat}><span aria-hidden="true">💬</span>问{ASSISTANT_NAME}</button>
         <button className={elderPage === 'today' ? 'active' : ''} onClick={() => setElderPage('today')}><span aria-hidden="true">☀</span>今天</button>
         <button className={elderPage === 'history' ? 'active' : ''} onClick={() => setElderPage('history')}><span aria-hidden="true">▤</span>我的记录</button>
-        <button onClick={() => setChatOpen(true)}><span aria-hidden="true">💬</span>问{ASSISTANT_NAME}</button>
       </nav>
       <footer className="demo-bar">
         <span>课堂演示 · 只用模拟资料</span>
@@ -296,20 +316,6 @@ function App() {
           </select>
         </label>
       </footer>
-      {chatOpen && (
-        <ElderChat
-          key={patientId}
-          patient={patient}
-          context={{ patient, checkins, records, todayRow, slots, items, measurements }}
-          opening={opening}
-          smsEnabled={sms.notifyFamily}
-          onClose={() => setChatOpen(false)}
-          onSaveEntry={saveEntry}
-          onMedsTaken={markDueMedsTaken}
-          onSavePhoto={savePhotoUpload}
-          onAddDoctorQuestion={addDoctorQuestion}
-        />
-      )}
     </div>
   )
 }

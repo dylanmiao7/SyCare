@@ -16,6 +16,18 @@ const SYSTEM_PROMPT = `你是 SyCare 的记录助手"小安"，帮老人查看�
 7. 你不能给家人发消息，也不能修改任何记录。
 8. 回答不超过 4 句话，不要用 Markdown、列表符号或表情。
 9. 只回答老人问到的事，不要主动提起和问题无关的读数、病历或照片。问题和健康数据无关时（比如想念家人、想聊天），先回应老人的心情，不要扯到血压等记录。`
+
+// 照护问答：家人回家看望、医生护士复诊时，在老人手机的照护模式里提问
+const CAREGIVER_PROMPT = `你是 SyCare 照护模式里的"照护问答"，回答家人或医生护士关于这位老人记录的问题。记录属于老人本人，是老人同意给照护者看的。
+
+回答规则：
+1. 只根据下面提供的"老人的记录"回答，给出具体的数字和日期。记录里没有的，就说"记录里没有"，不要编造。
+2. 先说结论，再说依据。可以用常见的医学名词，语气客观、简洁。
+3. 不判断是什么病，不建议加药、减药、停药、换药。涉及这些时，请对方和主治医生或药师确认。
+4. 有超出提醒范围、和平时明显不同、或者老人说过不舒服的记录，必须如实指出，不要用"没事""正常"来安慰。
+5. 空白不等于 0；没有打卡不等于没吃药。"老人拍照上传、未核对"的病历，你看不到内容，要提醒对方对照原件核对。
+6. 你不能发消息，也不能修改任何记录。
+7. 回答不超过 6 句话，不要用 Markdown、列表符号或表情。`
 // ===================================================================
 
 const cors = {
@@ -71,7 +83,7 @@ Deno.serve(async (req) => {
   const apiKey = Deno.env.get('DEEPSEEK_API_KEY')
   if (!apiKey) return json({ error: 'DEEPSEEK_API_KEY 还没有设置' }, 500)
 
-  let body: { question?: string; patient_id?: string; meds?: Med[] }
+  let body: { question?: string; patient_id?: string; meds?: Med[]; audience?: string }
   try {
     body = await req.json()
   } catch {
@@ -82,6 +94,7 @@ Deno.serve(async (req) => {
   // 只允许模拟老人，问题长度也有上限，避免被拿去随便调用
   if (!question || question.length > 300 || !/^SYN-\d{3}$/.test(patientId)) return json({ error: 'bad request' }, 400)
   const meds = Array.isArray(body.meds) ? body.meds.slice(0, 10) : []
+  const forCaregiver = body.audience === 'caregiver'
 
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
   const since = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)
@@ -107,8 +120,8 @@ Deno.serve(async (req) => {
         temperature: 0.3,
         max_tokens: 400,
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `今天是 ${new Date().toISOString().slice(0, 10)}。\n\n老人的记录：\n${context}\n\n老人的问题：${question}` },
+          { role: 'system', content: forCaregiver ? CAREGIVER_PROMPT : SYSTEM_PROMPT },
+          { role: 'user', content: `今天是 ${new Date().toISOString().slice(0, 10)}。\n\n老人的记录：\n${context}\n\n${forCaregiver ? '照护者' : '老人'}的问题：${question}` },
         ],
       }),
     })

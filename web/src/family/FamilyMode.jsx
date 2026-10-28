@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { BloodPressureChart, CaptureBadge, InlineEmpty, MoodBadge, PageHeading, StatCard } from './parts'
-import { BP_RULES } from '../lib/assistant'
+import { BP_RULES, answerQuestion } from '../lib/assistant'
+import { askAI } from '../lib/ai'
 import { average, dateLabel, daysBetween, displayPatientName, displayRecordSource, displayRecordText, hasBloodPressure, localDate, monthDay, shortDate } from '../lib/format'
 import { DEMO_PIN, getMedLog, getPhoto, medSlots } from '../lib/localStore'
 import { isPhotoRecord, isUnverified } from '../lib/recordLabels'
@@ -9,7 +10,7 @@ import { PRESET_ITEMS, SYMPTOM_KEY, checkValue, formatValue, presetConfig, range
 // 日常的（每天看的数据、用药、提醒）放一页，单次的（复诊、病历）放一页
 const NAV_ITEMS = [
   { id: 'daily', label: '日常总览', icon: '⌂' },
-  { id: 'visit', label: '复诊与病历', icon: '▤' },
+  { id: 'visit', label: '复诊病历', icon: '▤' },
 ]
 
 export default function FamilyMode(props) {
@@ -26,10 +27,10 @@ export default function FamilyMode(props) {
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark">S</span>
-          <span><strong>SyCare</strong><small>家属模式</small></span>
+          <span><strong>SyCare</strong><small>照护模式</small></span>
         </div>
-        <div className="sidebar-label">家属与医护</div>
-        <nav className="main-nav" aria-label="家属模式导航">
+        <div className="sidebar-label">家人和医护用</div>
+        <nav className="main-nav" aria-label="照护模式导航">
           {NAV_ITEMS.map((item) => (
             <button key={item.id} className={`nav-item ${section === item.id ? 'active' : ''}`} onClick={() => { setSection(item.id); clearAlerts() }}>
               <span className="nav-icon" aria-hidden="true">{item.icon}</span><span>{item.label}</span>
@@ -47,7 +48,7 @@ export default function FamilyMode(props) {
 
       <main className="main-area">
         <header className="topbar">
-          <div className="breadcrumb"><span>家属模式</span><span className="crumb-divider">/</span><strong>{navLabel}</strong></div>
+          <div className="breadcrumb"><span>照护模式</span><span className="crumb-divider">/</span><strong>{navLabel}</strong></div>
           <div className="topbar-actions">
             <label className="patient-picker">
               <span className="sr-only">演示：切换长辈</span>
@@ -83,7 +84,7 @@ function PinGate({ onUnlock, onExit }) {
   return (
     <div className="pin-screen">
       <form className="pin-card" onSubmit={submit}>
-        <h1>家属模式</h1>
+        <h1>照护模式</h1>
         <p>这里可以查看记录、设置用药和准备复诊。请输入 4 位密码。</p>
         <input
           type="password"
@@ -513,7 +514,7 @@ function VisitAndRecords(props) {
 
   return (
     <>
-      <PageHeading eyebrow="看病的时候用" title="复诊与病历" description="设好下次复诊日期；去之前整理上次就诊以来的记录，核对、修改后打印或分享给医生护士。" action={<button className="button button-primary no-print" onClick={() => window.print()}>打印 / 保存 PDF</button>} />
+      <PageHeading eyebrow="看病的时候用" title="复诊病历" description="设好下次复诊日期；去之前整理上次就诊以来的记录，核对、修改后打印或分享给医生护士。" action={<button className="button button-primary no-print" onClick={() => window.print()}>打印 / 保存 PDF</button>} />
       <section className="panel visit-panel no-print">
         <label className="field"><span>下次复诊日期</span><input type="date" min={localDate()} value={visitDate} onChange={(event) => onVisitDateChange(event.target.value)} /></label>
         <p>{visitDate ? `还有 ${daysBetween(localDate(), visitDate)} 天。` : '还没有设置。'}复诊前 7 天，小安会主动问老人有什么想问医生的。</p>
@@ -527,6 +528,8 @@ function VisitAndRecords(props) {
         <textarea aria-label="复诊准备内容" value={text} onChange={(event) => setEdited(event.target.value)} rows="22" />
         <div className="form-actions no-print"><span>文字可以修改。打印前请核对日期、读数和来源。</span><button className="button button-outline" onClick={copy}>复制文字</button></div>
       </section>
+
+      <CaregiverAsk {...props} />
 
       {questions.length > 0 && (
         <section className="panel no-print question-panel">
@@ -542,6 +545,46 @@ function VisitAndRecords(props) {
 
       <Records {...props} />
     </>
+  )
+}
+
+const SAMPLE_QUESTIONS = ['这两周血压最高是哪天？那天老人怎么说？', '最近有哪些不舒服？', '有没有还没核对的病历照片？']
+
+// 照护问答：家人看望、医生护士复诊时，拿着老人的手机追问记录里的细节
+function CaregiverAsk({ patient, checkins, records, slots, items, measurements }) {
+  const [question, setQuestion] = useState('')
+  const [answers, setAnswers] = useState([])
+  const [thinking, setThinking] = useState(false)
+
+  const ask = async (text = question) => {
+    const value = text.trim()
+    if (!value || thinking) return
+    setQuestion('')
+    setThinking(true)
+    const reply = await askAI({ patientId: patient.patient_id, question: value, slots, audience: 'caregiver' })
+    setThinking(false)
+    const fallback = reply ? null : answerQuestion(value, { patient, checkins, records, slots, items, measurements })
+    setAnswers((current) => [{ id: crypto.randomUUID(), question: value, text: reply || fallback.text, offline: !reply }, ...current])
+  }
+
+  return (
+    <section className="panel no-print caregiver-ask">
+      <div className="panel-heading"><div><h2>照护问答</h2><p>问记录里的细节。AI 只整理记录，不诊断、不建议调药，请以原件和医生判断为准。</p></div></div>
+      <form className="ask-form" onSubmit={(event) => { event.preventDefault(); ask() }}>
+        <input value={question} maxLength="300" placeholder="例如：空腹血糖有几次偏低？" onChange={(event) => setQuestion(event.target.value)} />
+        <button className="button button-primary" type="submit" disabled={!question.trim() || thinking}>{thinking ? '正在整理…' : '提问'}</button>
+      </form>
+      <div className="ask-samples">
+        {SAMPLE_QUESTIONS.map((sample) => <button key={sample} className="button button-soft" onClick={() => ask(sample)} disabled={thinking}>{sample}</button>)}
+      </div>
+      {answers.map((item) => (
+        <div className="ask-answer" key={item.id}>
+          <strong>问：{item.question}</strong>
+          <p>{item.text}</p>
+          {item.offline && <small className="muted">AI 暂时连不上，这是按规则整理的回答。</small>}
+        </div>
+      ))}
+    </section>
   )
 }
 

@@ -111,6 +111,9 @@
 .elder-tabs button.active { background: var(--elder-green-soft); color: var(--elder-green); }
 
 /* 我的记录 */
+.caregiver-entry { margin-top: 28px; padding: 16px 4px 0; border-top: 1px dashed var(--elder-line); text-align: center; }
+.caregiver-entry p { margin: 0 0 8px; color: var(--elder-muted); font-size: 16px; }
+.caregiver-entry button { padding: 10px 16px; border: 1px solid var(--elder-line); border-radius: 12px; background: #fff; color: var(--elder-muted); font-size: 16px; }
 .history-header { margin-bottom: 16px; }
 .history-header h1 { margin: 0; font-size: 28px; }
 .history-header p { margin: 4px 0 0; color: var(--elder-muted); }
@@ -122,9 +125,9 @@
 .history-day dd { margin: 0; font-weight: 700; text-align: right; }
 
 /* 全屏对话 */
-.chat-screen { position: fixed; z-index: 40; inset: 0; display: flex; flex-direction: column; background: var(--elder-bg); }
+.chat-screen { position: fixed; z-index: 4; inset: 0 0 var(--elder-nav-height, 118px); display: flex; flex-direction: column; background: var(--elder-bg); }
+.chat-screen[hidden] { display: none; }
 .chat-header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--elder-line); background: #fff; }
-.chat-back { min-height: 52px; padding: 0 18px; border: 2px solid var(--elder-line); border-radius: 14px; background: #fff; color: var(--elder-ink); font-size: 21px; font-weight: 700; }
 .chat-title { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 700; }
 .chat-messages { flex: 1; overflow-y: auto; width: min(640px, 100%); margin: 0 auto; padding: 18px 16px; }
 .chat-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 16px; }

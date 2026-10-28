@@ -22,7 +22,7 @@ let messageId = 0
 const aiMessage = (text, extra = {}) => ({ id: ++messageId, from: 'ai', text, ...extra })
 const myMessage = (text, extra = {}) => ({ id: ++messageId, from: 'me', text, ...extra })
 
-export default function ElderChat({ patient, context, opening, smsEnabled, onClose, onSaveEntry, onMedsTaken, onSavePhoto, onAddDoctorQuestion }) {
+export default function ElderChat({ hidden, patient, context, opening, smsEnabled, onSaveEntry, onMedsTaken, onSavePhoto, onAddDoctorQuestion }) {
   const [messages, setMessages] = useState(() => [aiMessage(opening.text)])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -77,7 +77,7 @@ export default function ElderChat({ patient, context, opening, smsEnabled, onClo
       }
       case 'doctor_question':
         onAddDoctorQuestion(action.question)
-        add(aiMessage(`记下了："${action.question}"。复诊的时候，家人在"复诊准备"里能看到，可以一起带给医生。`))
+        add(aiMessage(`记下了："${action.question}"。复诊的时候，家人在照护模式的"复诊病历"里能看到，可以一起带给医生。`))
         break
       case 'ask_doctor_question':
         setInput('我想问医生：')
@@ -246,9 +246,8 @@ export default function ElderChat({ patient, context, opening, smsEnabled, onClo
   }
 
   return (
-    <div className="chat-screen" role="dialog" aria-label={`和${ASSISTANT_NAME}说话`}>
+    <div className="chat-screen" hidden={hidden} aria-label={`和${ASSISTANT_NAME}说话`}>
       <header className="chat-header">
-        <button className="chat-back" onClick={onClose}>‹ 返回</button>
         <span className="chat-title"><AssistantAvatar size={36} />{ASSISTANT_NAME}</span>
       </header>
 

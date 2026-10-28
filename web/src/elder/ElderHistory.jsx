@@ -4,7 +4,7 @@ import { SYMPTOM_KEY, formatValue } from '../lib/items'
 const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 
 // "我的记录"：最近 7 天，大字列表，不用图表
-export default function ElderHistory({ checkins, items, measurements }) {
+export default function ElderHistory({ checkins, items, measurements, onOpenFamily }) {
   const days = [...Array(7)].map((_, index) => localDate(-index))
 
   function linesFor(date) {
@@ -42,6 +42,10 @@ export default function ElderHistory({ checkins, items, measurements }) {
           </section>
         )
       })}
+      <section className="caregiver-entry">
+        <p>家人或医生要查看、设置时，请他们点这里。</p>
+        <button onClick={onOpenFamily}>照护模式（家人和医生用）›</button>
+      </section>
     </div>
   )
 }

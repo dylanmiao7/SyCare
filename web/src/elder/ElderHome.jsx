@@ -13,7 +13,7 @@ const MOODS = [
   { value: '不太好', face: '😟', label: '不太好' },
 ]
 
-export default function ElderHome({ patient, todayRow, slots, items, measurements, opening, saving, onToggleMed, onSetMood, onSave, onOpenChat, onOpenFamily }) {
+export default function ElderHome({ patient, todayRow, slots, items, measurements, opening, saving, onToggleMed, onSetMood, onSave, onOpenChat }) {
   const [showProfile, setShowProfile] = useState(false)
   const [editing, setEditing] = useState(null)
   const [picked, setPicked] = useState([])
@@ -43,7 +43,6 @@ export default function ElderHome({ patient, todayRow, slots, items, measurement
             <small>{todayHeading()}</small>
           </span>
         </button>
-        <button className="family-link" onClick={onOpenFamily}>家属模式</button>
       </header>
 
       <button className="assistant-card" onClick={onOpenChat} aria-label={`和${ASSISTANT_NAME}说话：${opening.bubble}`}>

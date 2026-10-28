@@ -427,3 +427,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .range-pair { display: flex; gap: 6px; }
 .range-pair input { min-width: 0; }
 .preset-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; color: #6f7b73; font-size: 12px; }
+
+/* 照护问答 */
+.caregiver-ask { margin-top: 15px; }
+.ask-form { display: flex; gap: 10px; }
+.ask-form input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid #dfe5df; border-radius: 10px; font-size: 14px; }
+.ask-samples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ask-samples .button { font-size: 12px; }
+.ask-answer { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: #f6f8f6; }
+.ask-answer strong { color: #304037; font-size: 13px; }
+.ask-answer p { margin: 6px 0 0; color: #3c4a41; font-size: 14px; line-height: 1.7; }
