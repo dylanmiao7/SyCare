@@ -213,6 +213,7 @@ function App() {
         onVerify={verifyRecord}
         onAddTextRecord={addTextRecord}
         meds={meds}
+        slots={slots}
         onMedsChange={changeMeds}
         visitDate={visitDate}
         onVisitDateChange={changeVisitDate}

@@ -406,3 +406,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .exit-family { display: none; }
   .verify-row { flex-direction: column; align-items: flex-start; }
 }
+
+/* 家属模式合并成两页后新增 */
+.meds-panel { margin-top: 15px; }
+.dose-chip { display: inline-block; margin: 2px 6px 2px 0; padding: 3px 8px; border-radius: 999px; background: #fdf1e7; color: #a4561c; font-size: 11px; font-weight: 700; }
+.dose-chip.taken { background: #e8f5ec; color: #23764a; }
+.visit-panel p { margin: 8px 0 0; color: #7d8981; font-size: 12px; }
+.records-section { margin-top: 24px; }
+.section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 12px; }
+.section-heading h2 { margin: 0; color: #304037; font-size: 16px; }
+.section-heading p { margin: 5px 0 0; color: #7d8981; font-size: 12px; }
+.outbox { margin-top: 12px; }
+.outbox summary { cursor: pointer; color: #4d5d53; font-size: 12px; font-weight: 700; }
+@media (max-width: 720px) { .section-heading { flex-direction: column; align-items: stretch; } }

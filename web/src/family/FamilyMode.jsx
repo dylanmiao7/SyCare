@@ -1,21 +1,19 @@
 import { useMemo, useState } from 'react'
 import { BloodPressureChart, CaptureBadge, InlineEmpty, MoodBadge, PageHeading, StatCard } from './parts'
 import { BP_RULES } from '../lib/assistant'
-import { average, dateLabel, displayPatientName, displayRecordSource, displayRecordText, hasBloodPressure, localDate, monthDay, shortDate } from '../lib/format'
+import { average, dateLabel, daysBetween, displayPatientName, displayRecordSource, displayRecordText, hasBloodPressure, localDate, monthDay, shortDate } from '../lib/format'
 import { DEMO_PIN, getMedLog, getPhoto, medSlots } from '../lib/localStore'
 import { isPhotoRecord, isUnverified } from '../lib/recordLabels'
 
+// 日常的（每天看的数据、用药、提醒）放一页，单次的（复诊、病历）放一页
 const NAV_ITEMS = [
-  { id: 'overview', label: '总览', icon: '⌂' },
-  { id: 'records', label: '病历', icon: '▤' },
-  { id: 'meds', label: '用药与复诊', icon: '◷' },
-  { id: 'visit', label: '复诊准备', icon: '▧' },
-  { id: 'reminders', label: '提醒设置', icon: '✉' },
+  { id: 'daily', label: '日常总览', icon: '⌂' },
+  { id: 'visit', label: '复诊与病历', icon: '▤' },
 ]
 
 export default function FamilyMode(props) {
   const [unlocked, setUnlocked] = useState(false)
-  const [section, setSection] = useState('overview')
+  const [section, setSection] = useState('daily')
   const { patient, patients, patientId, onPatientChange, onExit, error, notice, clearAlerts } = props
 
   if (!unlocked) return <PinGate onUnlock={() => setUnlocked(true)} onExit={onExit} />
@@ -64,11 +62,8 @@ export default function FamilyMode(props) {
         <div className="page-wrap">
           {error && <div className="alert alert-error" role="alert"><span>!</span><div>{error}</div><button aria-label="关闭提示" onClick={clearAlerts}>×</button></div>}
           {notice && <div className="alert alert-success" role="status"><span>✓</span><div>{notice}</div><button aria-label="关闭提示" onClick={clearAlerts}>×</button></div>}
-          {section === 'overview' && <Overview {...props} />}
-          {section === 'records' && <Records {...props} />}
-          {section === 'meds' && <MedsAndVisit {...props} />}
-          {section === 'visit' && <VisitPrep {...props} />}
-          {section === 'reminders' && <Reminders {...props} />}
+          {section === 'daily' && <Daily {...props} />}
+          {section === 'visit' && <VisitAndRecords {...props} />}
           <footer className="page-footer"><span>SyCare · 体验版</span><span>记录帮助日常沟通，不用于诊断或治疗决策。</span></footer>
         </div>
       </main>
@@ -107,7 +102,8 @@ function PinGate({ onUnlock, onExit }) {
   )
 }
 
-function Overview({ patient, checkins, records }) {
+function Daily(props) {
+  const { patient, checkins, records } = props
   const [tab, setTab] = useState('health')
   const recent = checkins.slice(0, 7)
   const bpRows = recent.filter(hasBloodPressure)
@@ -119,7 +115,7 @@ function Overview({ patient, checkins, records }) {
 
   return (
     <>
-      <PageHeading eyebrow="家属与医护查看" title={`${displayPatientName(patient.display_name)}的近况`} description="只整理已经记录的内容，空白不会按 0 计算。" />
+      <PageHeading eyebrow="每天看看" title={`${displayPatientName(patient.display_name)}的近况`} description="只整理已经记录的内容，空白不会按 0 计算。" />
       <div className="stats-grid">
         <StatCard icon="⌁" tone="blue" label="最近血压" value={bpRows[0] ? `${bpRows[0].systolic_mmhg} / ${bpRows[0].diastolic_mmhg}` : '暂无'} unit={bpRows[0] ? 'mmHg' : ''} foot={bpRows[0] ? `${monthDay(bpRows[0].record_date)} · 近 7 条中 ${bpRows.length} 天有读数` : '最近 7 条记录'} />
         <StatCard icon="◷" tone="violet" label="平均睡眠" value={sleepAverage == null ? '暂无' : sleepAverage.toFixed(1)} unit={sleepAverage == null ? '' : '小时'} foot={`${sleepRows.length} 天填写了睡眠`} />
@@ -131,6 +127,8 @@ function Overview({ patient, checkins, records }) {
         <BloodPressureChart rows={recent} />
         <div className="chart-legend"><span><i className="legend-dot systolic" />高压（收缩压）</span><span><i className="legend-dot diastolic" />低压（舒张压）</span><span className="chart-footnote">仅展示记录值，不作诊断</span></div>
       </section>
+
+      <MedList {...props} />
 
       <div className="tab-row" role="tablist">
         <button role="tab" aria-selected={tab === 'health'} className={tab === 'health' ? 'active' : ''} onClick={() => setTab('health')}>健康数据</button>
@@ -182,6 +180,8 @@ function Overview({ patient, checkins, records }) {
           ) : <InlineEmpty text="还没有关怀内容。" />}
         </section>
       )}
+
+      <Reminders {...props} />
     </>
   )
 }
@@ -219,9 +219,10 @@ function RecordCard({ record, onVerify, saving }) {
   )
 }
 
-function Records({ patient, records, saving, onVerify, onAddTextRecord }) {
+function Records({ records, saving, onVerify, onAddTextRecord }) {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ recordDate: localDate(), recordType: '门诊病历', recordText: '' })
+  const unverified = records.filter(isUnverified).length
   const submit = async (event) => {
     event.preventDefault()
     if (!form.recordText.trim()) return
@@ -229,9 +230,11 @@ function Records({ patient, records, saving, onVerify, onAddTextRecord }) {
     if (ok) { setShowForm(false); setForm({ recordDate: localDate(), recordType: '门诊病历', recordText: '' }) }
   }
   return (
-    <>
-      <PageHeading eyebrow="资料收纳" title="病历" description={`${displayPatientName(patient.display_name)}拍照上传的病历和家属录入的文字。`} action={<button className="button button-primary" onClick={() => setShowForm(!showForm)}>{showForm ? '收起' : '＋ 录入病历文字'}</button>} />
-      <div className="storage-note"><span>i</span><div><strong>拍照上传的病历要核对</strong><p>老人自己拍的病历标为"未核对"。AI 回答时会提醒以原件为准，也不会根据处方照片修改用药清单。复诊时请护士或家属对照原图核对。</p></div></div>
+    <section className="no-print records-section">
+      <div className="section-heading">
+        <div><h2>病历（{records.length}）</h2><p>{unverified ? `${unverified} 份老人拍照上传的还没核对。AI 会提醒以原件为准，也不会根据处方照片修改用药清单。` : '老人拍照上传的病历和家属录入的文字。'}</p></div>
+        <button className="button button-outline" onClick={() => setShowForm(!showForm)}>{showForm ? '收起' : '＋ 录入病历文字'}</button>
+      </div>
       {showForm && (
         <form className="panel form-panel" onSubmit={submit}>
           <div className="form-grid">
@@ -245,11 +248,11 @@ function Records({ patient, records, saving, onVerify, onAddTextRecord }) {
       <section className="record-list">
         {records.length ? records.map((record) => <RecordCard key={record.record_id} record={record} onVerify={onVerify} saving={saving} />) : <section className="panel"><InlineEmpty text="还没有病历。" /></section>}
       </section>
-    </>
+    </section>
   )
 }
 
-function MedsAndVisit({ patient, meds, onMedsChange, visitDate, onVisitDateChange }) {
+function MedList({ meds, slots, onMedsChange }) {
   const [form, setForm] = useState({ name: '', dose: '', times: '08:00' })
   const [formError, setFormError] = useState('')
   const add = (event) => {
@@ -264,41 +267,37 @@ function MedsAndVisit({ patient, meds, onMedsChange, visitDate, onVisitDateChang
     setFormError('')
   }
   return (
-    <>
-      <PageHeading eyebrow="家属设置" title="用药与复诊" description={`${displayPatientName(patient.display_name)}的用药清单只能在这里修改，老人端只负责打卡。`} />
-      <div className="storage-note"><span>!</span><div><strong>用药清单请按医生处方填写</strong><p>老人拍了新处方后，AI 不会自动改这里。请对照处方原件或咨询医生、药师后再修改。演示版只保存在这台设备上。</p></div></div>
-      <section className="panel">
-        <div className="panel-heading"><div><h2>用药清单</h2><p>每个时间点会在老人首页出现一个打卡按钮</p></div></div>
-        {meds.length ? (
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead><tr><th>药名</th><th>每次用量</th><th>时间</th><th /></tr></thead>
-              <tbody>
-                {meds.map((med) => (
-                  <tr key={med.id}>
-                    <td><strong>{med.name}</strong></td>
-                    <td>{med.dose || '—'}</td>
-                    <td>{med.times.join('、')}</td>
-                    <td><button className="text-button" onClick={() => onMedsChange(meds.filter((item) => item.id !== med.id))}>删除</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <InlineEmpty text="还没有设置用药。" />}
+    <section className="panel meds-panel">
+      <div className="panel-heading"><div><h2>用药</h2><p>请按医生处方填写；老人拍了新处方，AI 也不会自动改这里。老人首页每个时间点有一个打卡按钮。</p></div></div>
+      {meds.length ? (
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead><tr><th>药名</th><th>每次用量</th><th>今天打卡</th><th /></tr></thead>
+            <tbody>
+              {meds.map((med) => (
+                <tr key={med.id}>
+                  <td><strong>{med.name}</strong></td>
+                  <td>{med.dose || '—'}</td>
+                  <td>
+                    {slots.filter((slot) => slot.med.id === med.id).map((slot) => (
+                      <span key={slot.id} className={`dose-chip ${slot.taken ? 'taken' : ''}`}>{slot.time} {slot.taken ? '✓ 已吃' : '未打卡'}</span>
+                    ))}
+                  </td>
+                  <td><button className="text-button" onClick={() => onMedsChange(meds.filter((item) => item.id !== med.id))}>删除</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : <InlineEmpty text="还没有设置用药。" />}
         <form className="med-form" onSubmit={add}>
           <label className="field"><span>药名</span><input value={form.name} placeholder="例如：降压药（示例）" onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
           <label className="field"><span>每次用量</span><input value={form.dose} placeholder="例如：1片" onChange={(event) => setForm({ ...form, dose: event.target.value })} /></label>
           <label className="field"><span>时间</span><input value={form.times} placeholder="08:00, 20:00" onChange={(event) => setForm({ ...form, times: event.target.value })} /></label>
           <button className="button button-primary" type="submit">添加</button>
         </form>
-        {formError && <p className="form-error">{formError}</p>}
-      </section>
-      <section className="panel visit-panel">
-        <div className="panel-heading"><div><h2>下次复诊</h2><p>复诊前 7 天，小安会主动问老人有什么想问医生的</p></div></div>
-        <label className="field"><span>复诊日期</span><input type="date" min={localDate()} value={visitDate} onChange={(event) => onVisitDateChange(event.target.value)} /></label>
-      </section>
-    </>
+      {formError && <p className="form-error">{formError}</p>}
+    </section>
   )
 }
 
@@ -367,7 +366,8 @@ function buildVisitText({ patient, checkins, records, meds, questions, from, to 
   ].filter((line) => line !== null).join('\n')
 }
 
-function VisitPrep({ patient, checkins, records, meds, questions, onQuestionsChange, onVerify, saving }) {
+function VisitAndRecords(props) {
+  const { patient, checkins, records, meds, questions, onQuestionsChange, visitDate, onVisitDateChange } = props
   const today = localDate()
   // 默认从上一次就诊记录开始（老人拍照上传的不算）
   const lastVisit = records.find((record) => !isPhotoRecord(record) && record.record_date < today)?.record_date
@@ -375,7 +375,6 @@ function VisitPrep({ patient, checkins, records, meds, questions, onQuestionsCha
   const [edited, setEdited] = useState(null)
   const draft = useMemo(() => buildVisitText({ patient, checkins, records, meds, questions, from, to: today }), [patient, checkins, records, meds, questions, from, today])
   const text = edited ?? draft
-  const unverified = records.filter((record) => isUnverified(record) && record.record_date >= from)
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(text); window.alert('已复制，可以粘贴到微信里分享。') }
@@ -384,7 +383,11 @@ function VisitPrep({ patient, checkins, records, meds, questions, onQuestionsCha
 
   return (
     <>
-      <PageHeading eyebrow="复诊前" title="复诊准备" description="整理上次就诊以来的记录，核对、修改后打印或分享给医生护士。" action={<button className="button button-primary no-print" onClick={() => window.print()}>打印 / 保存 PDF</button>} />
+      <PageHeading eyebrow="看病的时候用" title="复诊与病历" description="设好下次复诊日期；去之前整理上次就诊以来的记录，核对、修改后打印或分享给医生护士。" action={<button className="button button-primary no-print" onClick={() => window.print()}>打印 / 保存 PDF</button>} />
+      <section className="panel visit-panel no-print">
+        <label className="field"><span>下次复诊日期</span><input type="date" min={localDate()} value={visitDate} onChange={(event) => onVisitDateChange(event.target.value)} /></label>
+        <p>{visitDate ? `还有 ${daysBetween(localDate(), visitDate)} 天。` : '还没有设置。'}复诊前 7 天，小安会主动问老人有什么想问医生的。</p>
+      </section>
       <div className="summary-toolbar no-print">
         <label>从 <input type="date" value={from} max={today} onChange={(event) => { setFrom(event.target.value); setEdited(null) }} /> 到今天{lastVisit ? `（上次就诊：${monthDay(lastVisit)}）` : ''}</label>
         <button className="text-button" onClick={() => setEdited(null)}>重新整理</button>
@@ -407,13 +410,7 @@ function VisitPrep({ patient, checkins, records, meds, questions, onQuestionsCha
         </section>
       )}
 
-      {unverified.length > 0 && (
-        <section className="no-print unverified-section">
-          <h2>待核对的拍照病历（{unverified.length}）</h2>
-          <p>请护士或家属对照原图核对后标为已核对。</p>
-          <div className="record-list">{unverified.map((record) => <RecordCard key={record.record_id} record={record} onVerify={onVerify} saving={saving} />)}</div>
-        </section>
-      )}
+      <Records {...props} />
     </>
   )
 }
@@ -431,18 +428,9 @@ function Reminders({ patient, checkins, sms, onSmsChange, outbox, onQueueSms }) 
   }
 
   return (
-    <>
-      <PageHeading eyebrow="提醒" title="提醒设置" description="提醒老人本人默认开启；通知家人必须老人本人同意。" />
-      <section className="panel">
-        <div className="panel-heading"><div><h2>提醒老人本人</h2><p>出现在老人首页和小安的开场白里</p></div><span className="subtle-tag">已开启</span></div>
-        <div className="detail-pair"><span>到点的药还没打卡</span><strong>小安会问"吃了吗"</strong></div>
-        <div className="detail-pair"><span>今天还没量血压</span><strong>小安会提醒量血压</strong></div>
-        <div className="detail-pair"><span>复诊前 7 天</span><strong>小安会问有什么想问医生的</strong></div>
-      </section>
-
-      <section className="panel reminder-panel">
+    <section className="panel reminder-panel">
         <div className="panel-heading"><div><h2>短信通知家人</h2><p>联系人：{patient.support_person || '未指定'}　·　分享偏好：{patient.sharing_preference || '未记录'}</p></div><span className="subtle-tag">{sms.notifyFamily ? '已开启' : '已关闭'}</span></div>
-        <p className="reminder-copy">短信只发提醒，不发血压、药名等健康数据。演示版只显示预览，不会真的发送。</p>
+        <p className="reminder-copy">提醒老人本人（吃药、量血压、复诊前记问题）由小安在首页负责，默认开启。通知家人必须老人本人同意，短信只发提醒，不发血压、药名等健康数据。演示版只显示预览，不会真的发送。</p>
         {sms.notifyFamily ? (
           <button className="button button-outline" onClick={() => onSmsChange({ ...sms, notifyFamily: false })}>关闭短信通知</button>
         ) : (
@@ -459,14 +447,14 @@ function Reminders({ patient, checkins, sms, onSmsChange, outbox, onQueueSms }) 
             演示：模拟今晚 8 点检查
           </button>
         )}
-      </section>
-
-      <section className="panel">
-        <div className="panel-heading"><div><h2>将发送的短信（预览）</h2><p>演示版不会真的发送</p></div></div>
-        {outbox.length ? outbox.map((item) => (
-          <div className="detail-pair" key={item.id}><span>{new Date(item.at).toLocaleString('zh-CN')}</span><strong>{item.text}</strong></div>
-        )) : <InlineEmpty text="还没有需要发送的短信。" />}
-      </section>
-    </>
+        {outbox.length > 0 && (
+          <details className="outbox">
+            <summary>将发送的短信预览（{outbox.length}）<span>⌄</span></summary>
+            {outbox.map((item) => (
+              <div className="detail-pair" key={item.id}><span>{new Date(item.at).toLocaleString('zh-CN')}</span><strong>{item.text}</strong></div>
+            ))}
+          </details>
+        )}
+    </section>
   )
 }
