@@ -9,6 +9,8 @@
 3. [中文模拟数据](data/README.md)
 4. [下一课教案：复诊小结、血压安全提示与 AI 问答](docs/03_下一课教案_复诊小结_血压提示_AI问答.md)
 5. [产品改进方案](docs/04_产品改进方案.md)
+6. [接入 DeepSeek](docs/05_接入DeepSeek.md)
+7. [部署到 Cloudflare Pages](docs/06_部署到CloudflarePages.md)
 
 仓库：https://github.com/dylanmiao7/SyCare
 
