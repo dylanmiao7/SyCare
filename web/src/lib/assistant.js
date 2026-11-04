@@ -323,14 +323,14 @@ export function openingLine({ patient, todayRow, slots, visitDate, questions, to
   if (dueSlot) {
     return {
       bubble: `${dueSlot.time} 的${dueSlot.med.name}吃了吗？`,
-      text: `${dueSlot.time} 的${dueSlot.med.name}吃了吗？吃过了，点一下首页的"已吃"，或者直接告诉我"吃过了"。`,
+      text: `${dueSlot.time} 的${dueSlot.med.name}吃了吗？吃过了，点一下"今天"页的打卡按钮，或者直接告诉我"吃过了"。`,
     }
   }
   const tracksBp = items.some((item) => item.kind === 'bp')
   if (tracksBp && !hasBloodPressure(todayRow)) {
     return {
       bubble: '今天量血压了吗？',
-      text: `今天量血压了吗？量好了直接告诉我就行，比如"高压 130，低压 80，心跳 70"，也可以在首页点"血压"自己填。${SAFETY_TEXT.measure}`,
+      text: `今天量血压了吗？量好了直接告诉我就行，比如"高压 130，低压 80，心跳 70"，也可以在"今天"页点"血压"自己填。${SAFETY_TEXT.measure}`,
     }
   }
   if (hasBloodPressure(todayRow) && (todayRow.systolic_mmhg >= BP_RULES.urgentSystolic || todayRow.diastolic_mmhg >= BP_RULES.urgentDiastolic)) {
@@ -343,7 +343,7 @@ export function openingLine({ patient, todayRow, slots, visitDate, questions, to
   if (missing) {
     return {
       bubble: `今天量${missing.label}了吗？`,
-      text: `今天量${missing.label}了吗？量好了告诉我${missing.key === 'glucose' ? '，比如"空腹血糖 6.1"' : '数字就行'}，也可以在首页点"${missing.label}"自己填。`,
+      text: `今天量${missing.label}了吗？量好了告诉我${missing.key === 'glucose' ? '，比如"空腹血糖 6.1"' : '数字就行'}，也可以在"今天"页点"${missing.label}"自己填。`,
     }
   }
   if (!todayRow?.mood_response) {

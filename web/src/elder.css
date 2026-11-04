@@ -153,8 +153,12 @@
 .chat-shortcuts button { flex: 0 0 auto; min-height: 44px; padding: 0 14px; border: 1px solid var(--elder-line); border-radius: 99px; background: #fff; color: var(--elder-ink); font-size: 17px; }
 .chat-form { display: flex; align-items: flex-end; gap: 8px; padding: 8px; border: 2px solid var(--elder-line); border-radius: 20px; background: #fff; }
 .chat-form textarea { flex: 1; min-width: 0; padding: 8px; border: 0; outline: 0; resize: none; background: transparent; font-size: 20px; line-height: 1.5; }
-.mic-button { flex: 0 0 auto; width: 56px; height: 56px; border: 0; border-radius: 50%; background: var(--elder-green-soft); font-size: 26px; }
-.mic-button.listening { background: var(--elder-red); color: #fff; animation: pulse 1.2s ease-in-out infinite; }
+.voice-button { display: block; width: 100%; min-height: 76px; border: 0; border-radius: 20px; background: var(--elder-green); color: #fff; font-size: 23px; font-weight: 700; }
+.voice-button:disabled { opacity: .55; }
+.voice-button.listening { background: var(--elder-red); animation: pulse 1.2s ease-in-out infinite; }
+.voice-heard { margin: 0 0 10px; padding: 12px 14px; border-radius: 14px; background: #fff; font-size: 20px; }
+.input-switch { display: block; margin: 8px auto 0; padding: 6px 12px; border: 0; background: none; color: var(--elder-muted); font-size: 17px; }
+.auto-speak { margin-left: auto; padding: 8px 12px; border: 1px solid var(--elder-line); border-radius: 12px; background: #fff; color: var(--elder-ink); font-size: 16px; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 8px rgba(163, 58, 44, .18); } }
 .send-button { flex: 0 0 auto; min-height: 56px; padding: 0 18px; border: 0; border-radius: 14px; background: var(--elder-green); color: #fff; font-size: 20px; font-weight: 700; }
 .send-button:disabled { opacity: .45; cursor: default; }

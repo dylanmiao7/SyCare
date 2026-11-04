@@ -110,6 +110,15 @@ export function saveContactLog(patientId, log) {
   return write(`contacts:${patientId}`, log)
 }
 
+// 小安的回答默认读出来
+export function getAutoSpeak() {
+  return read('autospeak', true)
+}
+
+export function saveAutoSpeak(value) {
+  return write('autospeak', value)
+}
+
 // 通知家人默认关闭，必须老人同意后才开启
 export function getSmsSettings(patientId) {
   return read(`sms:${patientId}`, { notifyFamily: false })

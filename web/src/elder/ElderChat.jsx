@@ -4,10 +4,19 @@ import { ASSISTANT_NAME, SAFETY_TEXT, describeFields, interpret, safetyAfterSave
 import { hasBloodPressure, localDate, monthDay } from '../lib/format'
 import { compressImage } from '../lib/records'
 import { askAI } from '../lib/ai'
+import { getAutoSpeak, saveAutoSpeak } from '../lib/localStore'
 
 const PHOTO_TYPES = ['门诊病历', '处方', '检查报告']
 
-const SpeechRecognition = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null
+const speechRecognition = () => window.SpeechRecognition || window.webkitSpeechRecognition || null
+
+const VOICE_ERRORS = {
+  'no-speech': '我没听到声音，请再点一下，靠近手机说。',
+  'audio-capture': '手机的麦克风好像用不了，您可以打字告诉我。',
+  'not-allowed': '麦克风还没有打开。请在浏览器设置里允许使用麦克风，或者打字告诉我。',
+  'service-not-allowed': '这个浏览器不能用语音，您可以打字告诉我。',
+  network: '语音暂时连不上，您可以打字告诉我。',
+}
 
 function speak(text) {
   if (!window.speechSynthesis) return
@@ -28,11 +37,17 @@ export default function ElderChat({ hidden, patient, context, opening, smsEnable
   const [busy, setBusy] = useState(false)
   const [thinking, setThinking] = useState(false)
   const [listening, setListening] = useState(false)
+  const [heard, setHeard] = useState('')
+  const [typing, setTyping] = useState(() => !speechRecognition())
+  const [autoSpeak, setAutoSpeak] = useState(getAutoSpeak)
   const [pendingRecord, setPendingRecord] = useState(null)
   const [photo, setPhoto] = useState(null)
   const fileInput = useRef(null)
   const listEnd = useRef(null)
   const recognition = useRef(null)
+  const speechUnlocked = useRef(false)
+  const lastSpoken = useRef(messages[0]?.id)
+  const sendRef = useRef(null)
 
   useEffect(() => {
     listEnd.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -43,7 +58,23 @@ export default function ElderChat({ hidden, patient, context, opening, smsEnable
     window.speechSynthesis?.cancel()
   }, [])
 
+  // 新回答自动读出来。开场白不读：有些手机要老人点过一下才允许发声
+  useEffect(() => {
+    const last = messages.at(-1)
+    if (!last || last.from !== 'ai' || last.id === lastSpoken.current) return
+    lastSpoken.current = last.id
+    if (autoSpeak && !hidden && last.text) speak(last.text)
+  }, [messages, autoSpeak, hidden])
+
+  // 切到别的页面就停下来，不在背后说话或听
+  useEffect(() => {
+    if (!hidden) return
+    recognition.current?.abort()
+    window.speechSynthesis?.cancel()
+  }, [hidden])
+
   const add = (...items) => setMessages((current) => [...current, ...items])
+  const closeRecordActions = () => setMessages((current) => current.map((message) => (message.actions?.some((action) => action.value === 'confirm-record') ? { ...message, done: true } : message)))
   const closeActions = (id) => setMessages((current) => current.map((message) => (message.id === id ? { ...message, done: true } : message)))
 
   function followUp(merged) {
@@ -57,6 +88,22 @@ export default function ElderChat({ hidden, patient, context, opening, smsEnable
     if (!value || busy || thinking) return
     setInput('')
     add(myMessage(value))
+
+    // 语音确认：老人说"对"或"不对"，和点按钮一样。必须整句就是确认，"对，我胸口痛"不算
+    if (pendingRecord) {
+      if (/^(不对|不是|错了|重说|重新说)[的了呀啊吧，。！!,\s]*$/.test(value)) {
+        closeRecordActions()
+        setPendingRecord(null)
+        add(aiMessage('好的，请再说一遍。'))
+        return
+      }
+      if (/^((对|是|没错|保存|好的?|嗯|可以)[的了呀啊吧，。！!,\s]*)+$/.test(value)) {
+        closeRecordActions()
+        confirmRecord()
+        return
+      }
+    }
+
     const action = interpret(value, context)
 
     switch (action.type) {
@@ -72,7 +119,7 @@ export default function ElderChat({ hidden, patient, context, opening, smsEnable
         break
       case 'meds_taken': {
         const marked = onMedsTaken()
-        add(aiMessage(marked.length ? `好的，已经帮您在首页打卡：${marked.join('、')}。` : '今天到点的药都已经打过卡了。'))
+        add(aiMessage(marked.length ? `好的，已经帮您在"今天"页打卡：${marked.join('、')}。` : '今天到点的药都已经打过卡了。'))
         break
       }
       case 'doctor_question':
@@ -81,6 +128,7 @@ export default function ElderChat({ hidden, patient, context, opening, smsEnable
         break
       case 'ask_doctor_question':
         setInput('我想问医生：')
+        setTyping(true)
         add(aiMessage('好的，您想问医生什么？说"我想问医生"，后面接着说问题就行。'))
         break
       case 'photo':
@@ -225,30 +273,64 @@ export default function ElderChat({ hidden, patient, context, opening, smsEnable
     }
   }
 
+  // 第一次点按钮时先发一个空声音，之后手机才允许自动朗读
+  function unlockSpeech() {
+    if (speechUnlocked.current || !window.speechSynthesis) return
+    speechUnlocked.current = true
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(''))
+  }
+
+  sendRef.current = handleSend
+
   function toggleListening() {
-    if (!SpeechRecognition) return
     if (listening) {
       recognition.current?.stop()
       return
     }
-    const recognizer = new SpeechRecognition()
+    const Recognition = speechRecognition()
+    if (!Recognition) return
+    unlockSpeech()
+    window.speechSynthesis?.cancel()
+
+    let transcript = ''
+    let failure = null
+    const recognizer = new Recognition()
     recognizer.lang = 'zh-CN'
     recognizer.interimResults = true
     recognizer.onresult = (event) => {
-      const transcript = Array.from(event.results).map((result) => result[0].transcript).join('')
-      setInput(transcript)
+      transcript = Array.from(event.results).map((result) => result[0].transcript).join('')
+      setHeard(transcript)
     }
-    recognizer.onend = () => setListening(false)
-    recognizer.onerror = () => setListening(false)
+    recognizer.onerror = (event) => { failure = event.error }
+    recognizer.onend = () => {
+      setListening(false)
+      setHeard('')
+      if (failure === 'aborted') return
+      if (transcript.trim()) { sendRef.current(transcript); return }
+      if (failure && failure !== 'no-speech') setTyping(true)
+      add(aiMessage(VOICE_ERRORS[failure] || '我没听清，请再点一下说。', { tone: 'caution' }))
+    }
     recognition.current = recognizer
+    setHeard('')
     setListening(true)
     recognizer.start()
+  }
+
+  function changeAutoSpeak() {
+    const next = !autoSpeak
+    setAutoSpeak(next)
+    saveAutoSpeak(next)
+    if (next) unlockSpeech()
+    else window.speechSynthesis?.cancel()
   }
 
   return (
     <div className="chat-screen" hidden={hidden} aria-label={`和${ASSISTANT_NAME}说话`}>
       <header className="chat-header">
         <span className="chat-title"><AssistantAvatar size={36} />{ASSISTANT_NAME}</span>
+        {window.speechSynthesis && (
+          <button className="auto-speak" onClick={changeAutoSpeak} aria-pressed={autoSpeak}>{autoSpeak ? '🔊 朗读开' : '🔇 朗读关'}</button>
+        )}
       </header>
 
       <div className="chat-messages">
@@ -273,7 +355,7 @@ export default function ElderChat({ hidden, patient, context, opening, smsEnable
                   ))}
                 </div>
               )}
-              {message.from === 'ai' && window.speechSynthesis && <button className="speak-button" onClick={() => speak(message.text)}>🔊 读给我听</button>}
+              {message.from === 'ai' && window.speechSynthesis && <button className="speak-button" onClick={() => speak(message.text)}>🔊 再读一遍</button>}
             </div>
           </div>
         ))}
@@ -285,27 +367,35 @@ export default function ElderChat({ hidden, patient, context, opening, smsEnable
       <footer className="chat-input">
         <div className="chat-shortcuts">
           <button onClick={startPhoto}>📷 拍病历</button>
-          <button onClick={() => setInput('我想问医生：')}>记下想问医生的</button>
+          <button onClick={() => { setInput('我想问医生：'); setTyping(true) }}>记下想问医生的</button>
           {(() => {
             const topic = context.items.find((item) => item.kind === 'bp' || !item.custom)?.label || '睡眠'
             return <button onClick={() => handleSend(`我最近${topic}怎么样？`)}>最近{topic}怎么样</button>
           })()}
         </div>
-        <form className="chat-form" onSubmit={(event) => { event.preventDefault(); handleSend() }}>
-          {SpeechRecognition && (
-            <button type="button" className={`mic-button ${listening ? 'listening' : ''}`} onClick={toggleListening} aria-label={listening ? '停止说话' : '用语音说'}>
-              {listening ? '■' : '🎤'}
+        {typing ? (
+          <>
+            <form className="chat-form" onSubmit={(event) => { event.preventDefault(); unlockSpeech(); handleSend() }}>
+              <textarea
+                rows="2"
+                value={input}
+                placeholder="在这里说说今天的情况"
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); unlockSpeech(); handleSend() } }}
+              />
+              <button type="submit" className="send-button" disabled={!input.trim() || busy}>发送</button>
+            </form>
+            {speechRecognition() && <button className="input-switch" onClick={() => setTyping(false)}>🎤 改用说话</button>}
+          </>
+        ) : (
+          <>
+            {listening && <p className="voice-heard" aria-live="polite">{heard || '正在听，请说…'}</p>}
+            <button className={`voice-button ${listening ? 'listening' : ''}`} onClick={toggleListening} disabled={busy || thinking}>
+              {listening ? '■ 说完了，点这里' : thinking ? '小安正在想…' : '🎤 点一下，开始说话'}
             </button>
-          )}
-          <textarea
-            rows="2"
-            value={input}
-            placeholder={listening ? '正在听，请说…' : '在这里说说今天的情况'}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }}
-          />
-          <button type="submit" className="send-button" disabled={!input.trim() || busy}>发送</button>
-        </form>
+            <button className="input-switch" onClick={() => { recognition.current?.abort(); setTyping(true) }}>⌨ 改用打字</button>
+          </>
+        )}
         <input ref={fileInput} type="file" accept="image/*" capture="environment" hidden onChange={handleFile} />
       </footer>
     </div>

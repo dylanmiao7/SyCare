@@ -15,9 +15,10 @@ import FamilyMode from './family/FamilyMode'
 
 function App() {
   const [mode, setMode] = useState('elder')
-  // 老人端三个页面：问小安 / 今天 / 我的记录。对话第一次打开后一直保留，切换页面不丢
-  const [chatStarted, setChatStarted] = useState(false)
-  const [elderPage, setElderPage] = useState('today')
+  // 老人端三个页面：今天 / 问小安 / 我的记录。一天里问小安最频繁，所以默认打开它；切换页面时对话不丢
+  const [elderPage, setElderPage] = useState('chat')
+  // 这位老人的记录读完后才开始对话，小安的开场白才准确
+  const [loadedPatientId, setLoadedPatientId] = useState('')
   const [patients, setPatients] = useState([])
   const [patientId, setPatientId] = useState('')
   const [checkins, setCheckins] = useState([])
@@ -68,6 +69,7 @@ function App() {
     ])
     if (checkinResult.error || recordResult.error) {
       setError(`读取${checkinResult.error ? '健康记录' : '病历'}失败：${(checkinResult.error || recordResult.error).message}`)
+      setLoadedPatientId(id)
       return
     }
     setCheckins(checkinResult.data || [])
@@ -75,6 +77,7 @@ function App() {
     // measurements 表还没建好时不影响其他功能
     if (measurementResult.error) console.warn('读取其他记录项目失败：', measurementResult.error.message)
     setMeasurements(measurementResult.data || [])
+    setLoadedPatientId(id)
   }, [])
 
   useEffect(() => { loadPatients() }, [loadPatients])
@@ -100,15 +103,9 @@ function App() {
 
   const clearAlerts = () => { setError(''); setNotice('') }
 
-  function openChat() {
-    setChatStarted(true)
-    setElderPage('chat')
-  }
-
   function changePatient(id) {
     setPatientId(id)
-    setChatStarted(false)
-    setElderPage('today')
+    setElderPage('chat')
     clearAlerts()
   }
 
@@ -197,13 +194,13 @@ function App() {
   function changeMeds(next) {
     saveMedications(patient.patient_id, next)
     setMeds(next)
-    setNotice('用药清单已更新，老人首页会同步显示。')
+    setNotice('用药清单已更新，老人的"今天"页会同步显示。')
   }
 
   function changeItems(next) {
     saveItemConfig(patient.patient_id, next)
     setItemConfig(next)
-    setNotice('记录项目已更新，老人首页会同步显示。')
+    setNotice('记录项目已更新，老人的"今天"页会同步显示。')
   }
 
   function changeVisitDate(date) {
@@ -300,13 +297,13 @@ function App() {
           onToggleMed={toggleMed}
           onSetMood={setMood}
           onSave={saveEntry}
-          onOpenChat={openChat}
+          onOpenChat={() => setElderPage('chat')}
         />
       )}
       {elderPage === 'history' && (
         <ElderHistory checkins={checkins} items={items} measurements={measurements} onOpenFamily={() => setMode('family')} />
       )}
-      {chatStarted && (
+      {loadedPatientId === patientId && (
         <ElderChat
           key={patientId}
           hidden={elderPage !== 'chat'}
@@ -321,8 +318,8 @@ function App() {
         />
       )}
       <nav className="elder-tabs" aria-label="老人模式导航">
-        <button className={elderPage === 'chat' ? 'active' : ''} onClick={openChat}><span aria-hidden="true">💬</span>问{ASSISTANT_NAME}</button>
         <button className={elderPage === 'today' ? 'active' : ''} onClick={() => setElderPage('today')}><span aria-hidden="true">☀</span>今天</button>
+        <button className={elderPage === 'chat' ? 'active' : ''} onClick={() => setElderPage('chat')}><span aria-hidden="true">💬</span>问{ASSISTANT_NAME}</button>
         <button className={elderPage === 'history' ? 'active' : ''} onClick={() => setElderPage('history')}><span aria-hidden="true">▤</span>我的记录</button>
       </nav>
       <footer className="demo-bar">

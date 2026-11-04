@@ -357,7 +357,7 @@ function MedList({ meds, slots, onMedsChange }) {
   }
   return (
     <section className="panel meds-panel">
-      <div className="panel-heading"><div><h2>用药</h2><p>请按医生处方填写；老人拍了新处方，AI 也不会自动改这里。老人首页每个时间点有一个打卡按钮。</p></div></div>
+      <div className="panel-heading"><div><h2>用药</h2><p>请按医生处方填写；老人拍了新处方，AI 也不会自动改这里。老人"今天"页每个时间点有一个打卡按钮。</p></div></div>
       {meds.length ? (
         <div className="table-scroll">
           <table className="data-table">
@@ -679,7 +679,7 @@ function Reminders({ patient, checkins, sms, onSmsChange, onQueueSms, caregivers
   return (
     <section className="panel reminder-panel">
         <div className="panel-heading"><div><h2>短信通知家人</h2><p>照护人：{caregivers.map((person) => person.name).join('、') || '还没有登记'}　·　分享偏好：{patient.sharing_preference || '未记录'}</p></div><span className="subtle-tag">{sms.notifyFamily ? '已开启' : '已关闭'}</span></div>
-        <p className="reminder-copy">提醒老人本人（吃药、量血压、复诊前记问题）由小安在首页负责，默认开启。通知家人必须老人本人同意，短信只发提醒，不发血压、药名等健康数据。演示版只显示预览，不会真的发送。</p>
+        <p className="reminder-copy">提醒老人本人（吃药、量血压、复诊前记问题）由小安负责，默认开启。通知家人必须老人本人同意，短信只发提醒，不发血压、药名等健康数据。演示版只显示预览，不会真的发送。</p>
         {sms.notifyFamily ? (
           <button className="button button-outline" onClick={() => onSmsChange({ ...sms, notifyFamily: false })}>关闭短信通知</button>
         ) : (
