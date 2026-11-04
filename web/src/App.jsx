@@ -3,8 +3,8 @@ import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { displayPatientName, localDate } from './lib/format'
 import { ASSISTANT_NAME, openingLine } from './lib/assistant'
 import {
-  getDoctorQuestions, getItemConfig, getMedLog, getMedications, getSmsOutbox, getSmsSettings, getVisitDate, medSlots, queueSms,
-  saveDoctorQuestions, saveItemConfig, saveMedications, savePhoto, saveSmsSettings, saveVisitDate, setMedTaken,
+  getCaregivers, getContactLog, getDoctorQuestions, getItemConfig, getMedLog, getMedications, getSmsOutbox, getSmsSettings, getVisitDate, medSlots, queueSms,
+  saveCaregivers, saveContactLog, saveDoctorQuestions, saveItemConfig, saveMedications, savePhoto, saveSmsSettings, saveVisitDate, setMedTaken,
 } from './lib/localStore'
 import { markRecordVerified, saveMeasurement, savePhotoRecord, saveTextRecord, saveTodayCheckin } from './lib/records'
 import { SYMPTOM_KEY, resolveItems } from './lib/items'
@@ -36,6 +36,8 @@ function App() {
   const [questions, setQuestions] = useState([])
   const [sms, setSms] = useState({ notifyFamily: false })
   const [outbox, setOutbox] = useState([])
+  const [caregivers, setCaregivers] = useState([])
+  const [contactLog, setContactLog] = useState([])
 
   const today = localDate()
   const patient = useMemo(() => patients.find((item) => item.patient_id === patientId) || null, [patients, patientId])
@@ -87,6 +89,8 @@ function App() {
     setQuestions(getDoctorQuestions(patient.patient_id))
     setSms(getSmsSettings(patient.patient_id))
     setOutbox(getSmsOutbox(patient.patient_id))
+    setCaregivers(getCaregivers(patient))
+    setContactLog(getContactLog(patient.patient_id))
   }, [patient, today])
 
   const opening = useMemo(
@@ -207,6 +211,16 @@ function App() {
     setVisitDate(date)
   }
 
+  function changeCaregivers(next) {
+    saveCaregivers(patient.patient_id, next)
+    setCaregivers(next)
+  }
+
+  function changeContactLog(next) {
+    saveContactLog(patient.patient_id, next)
+    setContactLog(next)
+  }
+
   function changeSms(next) {
     saveSmsSettings(patient.patient_id, next)
     setSms(next)
@@ -262,6 +276,10 @@ function App() {
         onSmsChange={changeSms}
         outbox={outbox}
         onQueueSms={queueDemoSms}
+        caregivers={caregivers}
+        onCaregiversChange={changeCaregivers}
+        contactLog={contactLog}
+        onContactLogChange={changeContactLog}
       />
     )
   }

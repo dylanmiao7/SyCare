@@ -7,10 +7,11 @@ import { DEMO_PIN, getMedLog, getPhoto, medSlots } from '../lib/localStore'
 import { isPhotoRecord, isUnverified } from '../lib/recordLabels'
 import { PRESET_ITEMS, SYMPTOM_KEY, checkValue, formatValue, presetConfig, rangeText, readingsFor } from '../lib/items'
 
-// 日常的（每天看的数据、用药、提醒）放一页，单次的（复诊、病历）放一页
+// 日常的（每天看的数据、用药）放一页，单次的（复诊、病历）放一页，联系家人的放一页
 const NAV_ITEMS = [
   { id: 'daily', label: '日常总览', icon: '⌂' },
   { id: 'visit', label: '复诊病历', icon: '▤' },
+  { id: 'people', label: '照护人', icon: '☎' },
 ]
 
 // 照护模式和老人模式在同一台手机上：同样的窄屏页面，底部两个按钮切换
@@ -34,6 +35,7 @@ export default function FamilyMode(props) {
         {notice && <div className="alert alert-success" role="status"><span>✓</span><div>{notice}</div><button aria-label="关闭提示" onClick={clearAlerts}>×</button></div>}
         {section === 'daily' && <Daily {...props} />}
         {section === 'visit' && <VisitAndRecords {...props} />}
+        {section === 'people' && <Caregivers {...props} />}
         <footer className="page-footer"><span>课堂体验 · 只用模拟资料</span><span>记录帮助日常沟通，不用于诊断或治疗决策。</span></footer>
       </main>
 
@@ -160,8 +162,6 @@ function Daily(props) {
           ) : <InlineEmpty text="还没有关怀内容。" />}
         </section>
       )}
-
-      <Reminders {...props} />
     </>
   )
 }
@@ -563,7 +563,108 @@ function CaregiverAsk({ patient, checkins, records, slots, items, measurements }
   )
 }
 
-function Reminders({ patient, checkins, sms, onSmsChange, outbox, onQueueSms }) {
+const CONTACT_METHODS = ['电话', '微信', '短信', '见面']
+const EMPTY_CAREGIVER = { name: '', relation: '', phone: '' }
+
+function Caregivers(props) {
+  const { patient, caregivers, onCaregiversChange, contactLog, onContactLogChange, outbox } = props
+  const [form, setForm] = useState(EMPTY_CAREGIVER)
+  const [editingId, setEditingId] = useState(null)
+  const [formError, setFormError] = useState('')
+  const [entry, setEntry] = useState({ caregiver: '', method: '电话', note: '' })
+  const selected = caregivers.some((person) => person.name === entry.caregiver) ? entry.caregiver : caregivers[0]?.name
+
+  const saveCaregiver = (event) => {
+    event.preventDefault()
+    const name = form.name.trim()
+    const phone = form.phone.trim()
+    if (!name) { setFormError('请填写姓名。'); return }
+    if (phone && !/^\+?[\d\s-]{5,20}$/.test(phone)) { setFormError('联系方式请填电话号码。'); return }
+    const person = { name, relation: form.relation.trim(), phone }
+    onCaregiversChange(editingId
+      ? caregivers.map((item) => (item.id === editingId ? { ...item, ...person } : item))
+      : [...caregivers, { id: crypto.randomUUID(), ...person }])
+    setForm(EMPTY_CAREGIVER)
+    setEditingId(null)
+    setFormError('')
+  }
+
+  const startEdit = (person) => {
+    setForm({ name: person.name, relation: person.relation, phone: person.phone })
+    setEditingId(person.id)
+    setFormError('')
+  }
+
+  const removeCaregiver = (id) => {
+    onCaregiversChange(caregivers.filter((item) => item.id !== id))
+    if (editingId === id) { setForm(EMPTY_CAREGIVER); setEditingId(null) }
+  }
+
+  const addEntry = (event) => {
+    event.preventDefault()
+    const note = entry.note.trim()
+    if (!note || !selected) return
+    onContactLogChange([{ id: crypto.randomUUID(), at: new Date().toISOString(), caregiver: selected, method: entry.method, note }, ...contactLog])
+    setEntry({ ...entry, note: '' })
+  }
+
+  // 手动记的联系和短信预览放在一起，按时间从新到旧
+  const history = [
+    ...contactLog.map((item) => ({ id: item.id, at: item.at, title: `${item.method} · ${item.caregiver}`, text: item.note })),
+    ...outbox.map((item) => ({ id: item.id, at: item.at, title: '短信预览 · 未真正发送', text: item.text })),
+  ].sort((a, b) => b.at.localeCompare(a.at))
+
+  return (
+    <>
+      <PageHeading eyebrow="联系家人" title="照护人" description={`${displayPatientName(patient.display_name)}的照护人和联系记录。演示版请填虚构号码，这些内容只存在这台手机上。`} />
+
+      <section className="panel">
+        <div className="panel-heading"><div><h2>照护人名单</h2></div></div>
+        {caregivers.length ? caregivers.map((person) => (
+          <div className="caregiver-row" key={person.id}>
+            <div>
+              <strong>{person.name}</strong>{person.relation && <small className="muted"> {person.relation}</small>}
+              {person.phone ? <a href={`tel:${person.phone}`}>{person.phone}</a> : <span className="muted">还没有填联系方式</span>}
+            </div>
+            <span>
+              <button className="text-button" onClick={() => startEdit(person)}>修改</button>
+              <button className="text-button" onClick={() => removeCaregiver(person.id)}>删除</button>
+            </span>
+          </div>
+        )) : <InlineEmpty text="还没有登记照护人。" />}
+        <form className="med-form" onSubmit={saveCaregiver}>
+          <label className="field"><span>姓名</span><input value={form.name} placeholder="例如：王女士" onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
+          <label className="field"><span>关系</span><input value={form.relation} placeholder="例如：女儿" onChange={(event) => setForm({ ...form, relation: event.target.value })} /></label>
+          <label className="field"><span>联系方式</span><input inputMode="tel" value={form.phone} placeholder="电话号码" onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
+          <button className="button button-primary" type="submit">{editingId ? '保存修改' : '添加'}</button>
+        </form>
+        {formError && <p className="form-error">{formError}</p>}
+      </section>
+
+      <section className="panel contact-history">
+        <div className="panel-heading"><div><h2>通信记录</h2><p>打过电话、见过面可以记在这里；短信提醒也会列在这里。</p></div></div>
+        {caregivers.length > 0 && (
+          <form className="med-form" onSubmit={addEntry}>
+            <label className="field"><span>和谁</span><select value={selected} onChange={(event) => setEntry({ ...entry, caregiver: event.target.value })}>{caregivers.map((person) => <option key={person.id}>{person.name}</option>)}</select></label>
+            <label className="field"><span>方式</span><select value={entry.method} onChange={(event) => setEntry({ ...entry, method: event.target.value })}>{CONTACT_METHODS.map((method) => <option key={method}>{method}</option>)}</select></label>
+            <label className="field contact-note"><span>说了什么</span><input value={entry.note} maxLength="200" placeholder="例如：说好周六陪老人复诊" onChange={(event) => setEntry({ ...entry, note: event.target.value })} /></label>
+            <button className="button button-outline" type="submit" disabled={!entry.note.trim()}>记下来</button>
+          </form>
+        )}
+        {history.length ? history.map((item) => (
+          <div className="contact-entry" key={item.id}>
+            <div><strong>{item.title}</strong><time>{new Date(item.at).toLocaleString('zh-CN')}</time></div>
+            <p>{item.text}</p>
+          </div>
+        )) : <InlineEmpty text="还没有通信记录。" />}
+      </section>
+
+      <Reminders {...props} />
+    </>
+  )
+}
+
+function Reminders({ patient, checkins, sms, onSmsChange, onQueueSms, caregivers }) {
   const [consent, setConsent] = useState(false)
   const today = localDate()
   const recordedToday = checkins.some((row) => row.record_date === today)
@@ -577,7 +678,7 @@ function Reminders({ patient, checkins, sms, onSmsChange, outbox, onQueueSms }) 
 
   return (
     <section className="panel reminder-panel">
-        <div className="panel-heading"><div><h2>短信通知家人</h2><p>联系人：{patient.support_person || '未指定'}　·　分享偏好：{patient.sharing_preference || '未记录'}</p></div><span className="subtle-tag">{sms.notifyFamily ? '已开启' : '已关闭'}</span></div>
+        <div className="panel-heading"><div><h2>短信通知家人</h2><p>照护人：{caregivers.map((person) => person.name).join('、') || '还没有登记'}　·　分享偏好：{patient.sharing_preference || '未记录'}</p></div><span className="subtle-tag">{sms.notifyFamily ? '已开启' : '已关闭'}</span></div>
         <p className="reminder-copy">提醒老人本人（吃药、量血压、复诊前记问题）由小安在首页负责，默认开启。通知家人必须老人本人同意，短信只发提醒，不发血压、药名等健康数据。演示版只显示预览，不会真的发送。</p>
         {sms.notifyFamily ? (
           <button className="button button-outline" onClick={() => onSmsChange({ ...sms, notifyFamily: false })}>关闭短信通知</button>
@@ -594,14 +695,6 @@ function Reminders({ patient, checkins, sms, onSmsChange, outbox, onQueueSms }) 
           <button className="button button-soft" onClick={() => onQueueSms(recordedToday ? `${name}今天已经记录了，不需要发提醒。` : `${name}今天还没有记录，可以打个电话问候一下。`, recordedToday)}>
             演示：模拟今晚 8 点检查
           </button>
-        )}
-        {outbox.length > 0 && (
-          <details className="outbox">
-            <summary>将发送的短信预览（{outbox.length}）<span>⌄</span></summary>
-            {outbox.map((item) => (
-              <div className="detail-pair" key={item.id}><span>{new Date(item.at).toLocaleString('zh-CN')}</span><strong>{item.text}</strong></div>
-            ))}
-          </details>
         )}
     </section>
   )

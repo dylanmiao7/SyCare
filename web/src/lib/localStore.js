@@ -90,6 +90,26 @@ export function savePhoto(recordId, dataUrl) {
   return write(`photo:${recordId}`, dataUrl)
 }
 
+// 照护人和他们的电话只存在这台手机上，不进共享数据库
+export function getCaregivers(patient) {
+  const saved = read(`caregivers:${patient.patient_id}`, null)
+  if (saved) return saved
+  return patient.support_person ? [{ id: 'demo-contact', name: patient.support_person, relation: '', phone: '' }] : []
+}
+
+export function saveCaregivers(patientId, caregivers) {
+  return write(`caregivers:${patientId}`, caregivers)
+}
+
+// 手动记下的联系记录（打电话、见面等）。短信预览在 outbox 里
+export function getContactLog(patientId) {
+  return read(`contacts:${patientId}`, [])
+}
+
+export function saveContactLog(patientId, log) {
+  return write(`contacts:${patientId}`, log)
+}
+
 // 通知家人默认关闭，必须老人同意后才开启
 export function getSmsSettings(patientId) {
   return read(`sms:${patientId}`, { notifyFamily: false })

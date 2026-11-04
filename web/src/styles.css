@@ -416,8 +416,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 12px; }
 .section-heading h2 { margin: 0; color: #304037; font-size: 16px; }
 .section-heading p { margin: 5px 0 0; color: #7d8981; font-size: 12px; }
-.outbox { margin-top: 12px; }
-.outbox summary { cursor: pointer; color: #4d5d53; font-size: 12px; font-weight: 700; }
 @media (max-width: 720px) { .section-heading { flex-direction: column; align-items: stretch; } }
 
 /* 记录项目 */
@@ -445,7 +443,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .care-header > span { justify-self: end; color: #56635a; font-size: 14px; }
 .care-back { justify-self: start; padding: 8px 12px; border: 1px solid #e3ddd2; border-radius: 12px; background: #fff; color: #1f2b24; font-size: 15px; font-weight: 600; }
 .care-page { width: min(560px, 100%); margin: 0 auto; padding: 20px 16px 24px; font-size: 14px; }
-.care-tabs { position: fixed; z-index: 6; inset: auto 0 0; display: grid; grid-template-columns: repeat(2, 1fr); width: min(560px, 100%); margin: 0 auto; padding: 6px; border-top: 1px solid #e3ddd2; background: #fff; }
+.care-tabs { position: fixed; z-index: 6; inset: auto 0 0; display: grid; grid-template-columns: repeat(3, 1fr); width: min(560px, 100%); margin: 0 auto; padding: 6px; border-top: 1px solid #e3ddd2; background: #fff; }
 .care-tabs button { display: grid; justify-items: center; min-height: 58px; border: 0; border-radius: 14px; background: none; color: #56635a; font-size: 16px; font-weight: 600; }
 .care-tabs button span { font-size: 20px; line-height: 1.2; }
 .care-tabs button.active { background: #e4f2e9; color: #1f7652; }
@@ -488,3 +486,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .care-shell { padding: 0; background: #fff; }
 }
 .item-range { display: block; margin-top: 2px; font-size: 11px; }
+
+/* 照护人 */
+.caregiver-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid #eff2ef; }
+.caregiver-row strong { color: #304037; font-size: 15px; }
+.caregiver-row a, .caregiver-row div > span { display: block; margin-top: 2px; font-size: 14px; }
+.caregiver-row a { color: #1f7652; }
+.caregiver-row > span { display: flex; flex: 0 0 auto; gap: 10px; }
+.contact-history { margin-top: 15px; }
+.contact-note { grid-column: 1 / -1; }
+.contact-entry { padding: 11px 0; border-top: 1px solid #eff2ef; }
+.contact-entry div { display: flex; justify-content: space-between; gap: 12px; }
+.contact-entry strong { color: #304037; font-size: 13px; }
+.contact-entry time { flex: 0 0 auto; color: #939d96; font-size: 11px; }
+.contact-entry p { margin: 4px 0 0; color: #4d5d53; font-size: 13px; line-height: 1.6; }
+.care-page .field input, .care-page .field select { font-size: 14px; }
+.care-page .field > span { font-size: 12px; }
+.care-page .text-button { font-size: 13px; }
