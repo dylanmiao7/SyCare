@@ -11,7 +11,6 @@
 5. [产品改进方案](docs/04_产品改进方案.md)
 6. [接入 DeepSeek](docs/05_接入DeepSeek.md)
 7. [部署到 Cloudflare Pages](docs/06_部署到CloudflarePages.md)
-8. [老人访谈：从被动记录到主动关怀](docs/07_老人访谈_从被动记录到主动关怀.md)
 
 仓库：https://github.com/dylanmiao7/SyCare
 
