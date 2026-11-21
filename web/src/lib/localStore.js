@@ -2,6 +2,7 @@
 // 只保存在这台设备的浏览器里。正式版需要放进数据库。
 
 import { defaultItems } from './items'
+import { DEFAULT_REMINDER_SETTINGS } from './reminders'
 
 const PREFIX = 'sycare:'
 
@@ -119,6 +120,36 @@ export function saveAutoSpeak(value) {
   return write('autospeak', value)
 }
 
+// 主动提醒的设置，在照护模式里改
+export function getReminderSettings(patientId) {
+  const saved = read(`reminders:${patientId}`, null)
+  return saved ? { ...DEFAULT_REMINDER_SETTINGS, ...saved, enabled: { ...DEFAULT_REMINDER_SETTINGS.enabled, ...saved.enabled } } : DEFAULT_REMINDER_SETTINGS
+}
+
+export function saveReminderSettings(patientId, settings) {
+  return write(`reminders:${patientId}`, settings)
+}
+
+// 今天已经发过的提醒，每种一天最多一次
+export function getReminderLog(patientId, date) {
+  return read(`reminderlog:${patientId}:${date}`, [])
+}
+
+export function addReminderLog(patientId, date, entry) {
+  const log = [...getReminderLog(patientId, date), entry]
+  write(`reminderlog:${patientId}:${date}`, log)
+  return log
+}
+
+// 老人最后一次跟小安说话的日期
+export function getLastChatDate(patientId) {
+  return read(`lastchat:${patientId}`, '')
+}
+
+export function saveLastChatDate(patientId, date) {
+  return write(`lastchat:${patientId}`, date)
+}
+
 // 通知家人默认关闭，必须老人同意后才开启
 export function getSmsSettings(patientId) {
   return read(`sms:${patientId}`, { notifyFamily: false })
@@ -138,4 +169,3 @@ export function queueSms(patientId, text) {
   write(`outbox:${patientId}`, outbox.slice(0, 20))
 }
 
-export const DEMO_PIN = '1234'

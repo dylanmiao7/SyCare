@@ -31,7 +31,7 @@ let messageId = 0
 const aiMessage = (text, extra = {}) => ({ id: ++messageId, from: 'ai', text, ...extra })
 const myMessage = (text, extra = {}) => ({ id: ++messageId, from: 'me', text, ...extra })
 
-export default function ElderChat({ hidden, patient, context, opening, smsEnabled, onSaveEntry, onMedsTaken, onSavePhoto, onAddDoctorQuestion }) {
+export default function ElderChat({ hidden, patient, context, opening, reminder, smsEnabled, onSaveEntry, onMedsTaken, onSavePhoto, onAddDoctorQuestion, onChatted }) {
   const [messages, setMessages] = useState(() => [aiMessage(opening.text)])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -74,6 +74,14 @@ export default function ElderChat({ hidden, patient, context, opening, smsEnable
   }, [hidden])
 
   const add = (...items) => setMessages((current) => [...current, ...items])
+
+  // 小安主动说的话（规则判断出来的提醒），和普通回答一样会读出来
+  const shownReminder = useRef(null)
+  useEffect(() => {
+    if (!reminder || reminder.id === shownReminder.current) return
+    shownReminder.current = reminder.id
+    add(aiMessage(reminder.text, { proactive: true, tone: reminder.key === 'bpTrend' ? 'caution' : '' }))
+  }, [reminder])
   const closeRecordActions = () => setMessages((current) => current.map((message) => (message.actions?.some((action) => action.value === 'confirm-record') ? { ...message, done: true } : message)))
   const closeActions = (id) => setMessages((current) => current.map((message) => (message.id === id ? { ...message, done: true } : message)))
 
@@ -88,6 +96,7 @@ export default function ElderChat({ hidden, patient, context, opening, smsEnable
     if (!value || busy || thinking) return
     setInput('')
     add(myMessage(value))
+    onChatted?.()
 
     // 语音确认：老人说"对"或"不对"，和点按钮一样。必须整句就是确认，"对，我胸口痛"不算
     if (pendingRecord) {
@@ -338,6 +347,7 @@ export default function ElderChat({ hidden, patient, context, opening, smsEnable
           <div key={message.id} className={`chat-row ${message.from}`}>
             {message.from === 'ai' && <AssistantAvatar size={40} />}
             <div className={`chat-bubble ${message.tone || ''}`}>
+              {message.proactive && <small className="chat-proactive">小安主动提醒</small>}
               {message.image ? <img src={message.image} alt="拍下的病历" className="chat-image" /> : <p>{message.text}</p>}
               {message.sources?.length > 0 && <small className="chat-sources">依据：{message.sources.slice(0, 7).join('、')}的记录</small>}
               {message.datePicker && !message.done && (

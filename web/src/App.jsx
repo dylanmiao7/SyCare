@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { displayPatientName, localDate } from './lib/format'
 import { ASSISTANT_NAME, openingLine } from './lib/assistant'
 import {
-  getCaregivers, getContactLog, getDoctorQuestions, getItemConfig, getMedLog, getMedications, getSmsOutbox, getSmsSettings, getVisitDate, medSlots, queueSms,
-  saveCaregivers, saveContactLog, saveDoctorQuestions, saveItemConfig, saveMedications, savePhoto, saveSmsSettings, saveVisitDate, setMedTaken,
+  addReminderLog, getCaregivers, getContactLog, getDoctorQuestions, getItemConfig, getLastChatDate, getMedLog, getMedications, getReminderLog, getReminderSettings,
+  getSmsOutbox, getSmsSettings, getVisitDate, medSlots, queueSms,
+  saveCaregivers, saveContactLog, saveDoctorQuestions, saveItemConfig, saveLastChatDate, saveMedications, savePhoto, saveReminderSettings, saveSmsSettings,
+  saveVisitDate, setMedTaken,
 } from './lib/localStore'
+import { dueReminders, inQuietHours, nextReminder } from './lib/reminders'
+import { notificationStatus, onNotificationClick, registerServiceWorker, requestNotifications, showNotification } from './lib/notify'
 import { markRecordVerified, saveMeasurement, savePhotoRecord, saveTextRecord, saveTodayCheckin } from './lib/records'
 import { SYMPTOM_KEY, resolveItems } from './lib/items'
 import ElderHome from './elder/ElderHome'
@@ -39,6 +43,11 @@ function App() {
   const [outbox, setOutbox] = useState([])
   const [caregivers, setCaregivers] = useState([])
   const [contactLog, setContactLog] = useState([])
+  const [reminderSettings, setReminderSettings] = useState(null)
+  const [reminderLog, setReminderLog] = useState([])
+  const [reminder, setReminder] = useState(null)
+  const [reminderBanner, setReminderBanner] = useState(null)
+  const [notifyStatus, setNotifyStatus] = useState(notificationStatus)
 
   const today = localDate()
   const patient = useMemo(() => patients.find((item) => item.patient_id === patientId) || null, [patients, patientId])
@@ -94,7 +103,58 @@ function App() {
     setOutbox(getSmsOutbox(patient.patient_id))
     setCaregivers(getCaregivers(patient))
     setContactLog(getContactLog(patient.patient_id))
+    setReminderSettings(getReminderSettings(patient.patient_id))
+    setReminderLog(getReminderLog(patient.patient_id, today))
   }, [patient, today])
+
+  // 已经允许过通知，就启动 service worker；点通知回到"问小安"
+  useEffect(() => {
+    if (notificationStatus() === 'granted') registerServiceWorker()
+    return onNotificationClick(() => { setMode('elder'); setElderPage('chat'); setReminderBanner(null) })
+  }, [])
+
+  // 主动提醒：打开时、每分钟、切回网页时，按规则看看有没有该说的话
+  const reminderCheck = useRef(() => {})
+  reminderCheck.current = () => {
+    if (!patient || !reminderSettings || loadedPatientId !== patientId || inQuietHours(reminderSettings)) return
+    const due = dueReminders({ checkins, measurements, items, lastChatDate: getLastChatDate(patient.patient_id) })
+    const next = nextReminder(due, reminderSettings, getReminderLog(patient.patient_id, today))
+    if (!next) return
+    setReminderLog(addReminderLog(patient.patient_id, today, { key: next.key, title: next.title, at: new Date().toISOString() }))
+    setReminder({ ...next, id: Date.now() })
+    // 网页在后台：弹系统通知。网页开着但不在"问小安"：页面上方显示一条，点了去听
+    if (document.hidden) showNotification({ title: next.title, body: next.text, key: next.key })
+    else if (elderPage !== 'chat') setReminderBanner(next)
+  }
+
+  useEffect(() => {
+    const run = () => reminderCheck.current()
+    // 切回网页时马上看一次；切走（包括关网页、刷新）时不看，免得提醒还没人看到就算发过了
+    const onVisible = () => { if (!document.hidden) run() }
+    run()
+    const timer = setInterval(run, 60 * 1000)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onVisible) }
+  }, [loadedPatientId, patientId, checkins, measurements, reminderSettings])
+
+  async function enableNotifications() {
+    const result = await requestNotifications()
+    setNotifyStatus(result)
+    return result
+  }
+
+  function testNotification() {
+    showNotification({ title: '试一下', body: '提醒已经打开了。以后有需要的时候，小安会这样提醒您。', key: 'test' })
+  }
+
+  function changeReminderSettings(next) {
+    saveReminderSettings(patient.patient_id, next)
+    setReminderSettings(next)
+  }
+
+  function markChatted() {
+    if (getLastChatDate(patient.patient_id) !== today) saveLastChatDate(patient.patient_id, today)
+  }
 
   const opening = useMemo(
     () => (patient ? openingLine({ patient, todayRow, slots, visitDate, questions, today, items, measurements }) : { bubble: '', text: '' }),
@@ -105,6 +165,8 @@ function App() {
 
   function changePatient(id) {
     setPatientId(id)
+    setReminder(null)
+    setReminderBanner(null)
     setElderPage('chat')
     clearAlerts()
   }
@@ -277,6 +339,13 @@ function App() {
         onCaregiversChange={changeCaregivers}
         contactLog={contactLog}
         onContactLogChange={changeContactLog}
+        reminderSettings={reminderSettings}
+        onReminderSettingsChange={changeReminderSettings}
+        reminderLog={reminderLog}
+        reminderPreview={dueReminders({ checkins, measurements, items, lastChatDate: getLastChatDate(patient.patient_id) })}
+        notifyStatus={notifyStatus}
+        onEnableNotifications={enableNotifications}
+        onTestNotification={testNotification}
       />
     )
   }
@@ -285,6 +354,12 @@ function App() {
     <div className="elder-shell">
       {error && <div className="elder-alert" role="alert">{error}<button onClick={clearAlerts} aria-label="关闭提示">×</button></div>}
       {notice && <div className="elder-alert ok" role="status">{notice}<button onClick={clearAlerts} aria-label="关闭提示">×</button></div>}
+      {reminderBanner && elderPage !== 'chat' && (
+        <button className="reminder-banner" onClick={() => { setElderPage('chat'); setReminderBanner(null) }}>
+          <strong>小安：{reminderBanner.title}</strong>
+          <span>点这里听小安说 ›</span>
+        </button>
+      )}
       {elderPage === 'today' && (
         <ElderHome
           patient={patient}
@@ -301,7 +376,14 @@ function App() {
         />
       )}
       {elderPage === 'history' && (
-        <ElderHistory checkins={checkins} items={items} measurements={measurements} onOpenFamily={() => setMode('family')} />
+        <ElderHistory
+          checkins={checkins}
+          items={items}
+          measurements={measurements}
+          notifyStatus={notifyStatus}
+          onEnableNotifications={enableNotifications}
+          onOpenFamily={() => setMode('family')}
+        />
       )}
       {loadedPatientId === patientId && (
         <ElderChat
@@ -310,6 +392,8 @@ function App() {
           patient={patient}
           context={{ patient, checkins, records, todayRow, slots, items, measurements }}
           opening={opening}
+          reminder={reminder}
+          onChatted={markChatted}
           smsEnabled={sms.notifyFamily}
           onSaveEntry={saveEntry}
           onMedsTaken={markDueMedsTaken}
@@ -319,7 +403,7 @@ function App() {
       )}
       <nav className="elder-tabs" aria-label="老人模式导航">
         <button className={elderPage === 'today' ? 'active' : ''} onClick={() => setElderPage('today')}><span aria-hidden="true">☀</span>今天</button>
-        <button className={elderPage === 'chat' ? 'active' : ''} onClick={() => setElderPage('chat')}><span aria-hidden="true">💬</span>问{ASSISTANT_NAME}</button>
+        <button className={elderPage === 'chat' ? 'active' : ''} onClick={() => { setElderPage('chat'); setReminderBanner(null) }}><span aria-hidden="true">💬</span>问{ASSISTANT_NAME}</button>
         <button className={elderPage === 'history' ? 'active' : ''} onClick={() => setElderPage('history')}><span aria-hidden="true">▤</span>我的记录</button>
       </nav>
       <footer className="demo-bar">

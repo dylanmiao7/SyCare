@@ -169,3 +169,11 @@
   .today-grid { grid-template-columns: 1fr; }
   .big-fields { grid-template-columns: 1fr 1fr; }
 }
+
+/* 小安主动提醒 */
+.chat-proactive { display: inline-block; margin-bottom: 4px; padding: 1px 8px; border-radius: 99px; background: var(--elder-green-soft); color: var(--elder-green); font-size: 14px; font-weight: 600; }
+.reminder-banner { position: sticky; z-index: 7; top: 0; display: grid; gap: 2px; width: min(560px, 100%); margin: 0 auto; padding: 14px 18px; border: 0; border-bottom: 2px solid var(--elder-green); background: var(--elder-green-soft); color: var(--elder-ink); text-align: left; }
+.reminder-banner strong { font-size: 20px; }
+.reminder-banner span { color: var(--elder-green); font-size: 17px; font-weight: 600; }
+.notify-card p { margin: 0 0 14px; color: var(--elder-muted); font-size: 18px; }
+.notify-card .elder-primary { width: 100%; }

@@ -1,26 +1,25 @@
 import { useMemo, useState } from 'react'
-import { BloodPressureChart, CaptureBadge, InlineEmpty, MoodBadge, PageHeading, StatCard } from './parts'
+import { BloodPressureChart, InlineEmpty, PageHeading, StatCard } from './parts'
 import { BP_RULES, answerQuestion } from '../lib/assistant'
 import { askAI } from '../lib/ai'
-import { average, dateLabel, daysBetween, displayPatientName, displayRecordSource, displayRecordText, hasBloodPressure, localDate, monthDay, shortDate } from '../lib/format'
-import { DEMO_PIN, getMedLog, getPhoto, medSlots } from '../lib/localStore'
+import { average, dateLabel, daysBetween, displayPatientName, displayRecordSource, displayRecordText, hasBloodPressure, localDate, monthDay } from '../lib/format'
+import { getMedLog, getPhoto, medSlots } from '../lib/localStore'
+import { REMINDER_RULES, REMINDER_TYPES } from '../lib/reminders'
 import { isPhotoRecord, isUnverified } from '../lib/recordLabels'
 import { PRESET_ITEMS, SYMPTOM_KEY, checkValue, formatValue, presetConfig, rangeText, readingsFor } from '../lib/items'
 
-// 日常的（每天看的数据、用药）放一页，单次的（复诊、病历）放一页，联系家人的放一页
+// 手机上一页只放一类事：每天看的近况、复诊和病历、照护人、设置（用药、记录项目、提醒）
 const NAV_ITEMS = [
-  { id: 'daily', label: '日常总览', icon: '⌂' },
+  { id: 'daily', label: '近况', icon: '⌂' },
   { id: 'visit', label: '复诊病历', icon: '▤' },
   { id: 'people', label: '照护人', icon: '☎' },
+  { id: 'settings', label: '设置', icon: '⚙' },
 ]
 
 // 照护模式和老人模式在同一台手机上：同样的窄屏页面，底部两个按钮切换
 export default function FamilyMode(props) {
-  const [unlocked, setUnlocked] = useState(false)
   const [section, setSection] = useState('daily')
   const { patient, onExit, error, notice, clearAlerts } = props
-
-  if (!unlocked) return <PinGate onUnlock={() => setUnlocked(true)} onExit={onExit} />
 
   return (
     <div className="care-shell">
@@ -36,6 +35,7 @@ export default function FamilyMode(props) {
         {section === 'daily' && <Daily {...props} />}
         {section === 'visit' && <VisitAndRecords {...props} />}
         {section === 'people' && <Caregivers {...props} />}
+        {section === 'settings' && <Settings {...props} />}
         <footer className="page-footer"><span>课堂体验 · 只用模拟资料</span><span>记录帮助日常沟通，不用于诊断或治疗决策。</span></footer>
       </main>
 
@@ -50,119 +50,135 @@ export default function FamilyMode(props) {
   )
 }
 
-function PinGate({ onUnlock, onExit }) {
-  const [pin, setPin] = useState('')
-  const [wrong, setWrong] = useState(false)
-  const submit = (event) => {
-    event.preventDefault()
-    if (pin === DEMO_PIN) onUnlock()
-    else { setWrong(true); setPin('') }
-  }
-  return (
-    <div className="pin-screen">
-      <form className="pin-card" onSubmit={submit}>
-        <h1>照护模式</h1>
-        <p>这里可以查看记录、设置用药和准备复诊。请输入 4 位密码。</p>
-        <input
-          type="password"
-          inputMode="numeric"
-          maxLength="4"
-          autoFocus
-          value={pin}
-          onChange={(event) => { setPin(event.target.value.replace(/\D/g, '')); setWrong(false) }}
-          aria-label="4 位密码"
-        />
-        {wrong && <p className="pin-error">密码不对，请再试一次。</p>}
-        <button className="button button-primary" type="submit" disabled={pin.length !== 4}>进入</button>
-        <button className="text-button" type="button" onClick={onExit}>‹ 回到老人模式</button>
-        <small>演示密码：{DEMO_PIN}</small>
-      </form>
-    </div>
-  )
-}
+const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
 function Daily(props) {
   const { patient, checkins, records } = props
-  const [tab, setTab] = useState('health')
+  const [shown, setShown] = useState(7)
   const recent = checkins.slice(0, 7)
   const bpRows = recent.filter(hasBloodPressure)
   const sleepRows = recent.filter((row) => row.sleep_hours != null)
   const sleepAverage = average(sleepRows.map((row) => row.sleep_hours))
   const talkDays = recent.filter((row) => row.wants_to_talk === '愿意').length
   const unverified = records.filter(isUnverified).length
-  const careRows = checkins.filter((row) => row.self_report_note || row.wants_to_talk || row.mood_response)
 
   return (
     <>
       <PageHeading eyebrow="每天看看" title={`${displayPatientName(patient.display_name)}的近况`} description="只整理已经记录的内容，空白不会按 0 计算。" />
       <div className="stats-grid">
-        <StatCard icon="⌁" tone="blue" label="最近血压" value={bpRows[0] ? `${bpRows[0].systolic_mmhg} / ${bpRows[0].diastolic_mmhg}` : '暂无'} unit={bpRows[0] ? 'mmHg' : ''} foot={bpRows[0] ? `${monthDay(bpRows[0].record_date)} · 近 7 条中 ${bpRows.length} 天有读数` : '最近 7 条记录'} />
-        <StatCard icon="◷" tone="violet" label="平均睡眠" value={sleepAverage == null ? '暂无' : sleepAverage.toFixed(1)} unit={sleepAverage == null ? '' : '小时'} foot={`${sleepRows.length} 天填写了睡眠`} />
-        <StatCard icon="♡" tone="rose" label="想找人聊聊" value={`${talkDays} 天`} unit="" foot="本人意愿，不代表已通知家人" />
-        <StatCard icon="▤" tone="green" label="病历" value={`${records.length} 份`} unit="" foot={unverified ? `${unverified} 份拍照上传待核对` : '没有待核对的照片'} />
+        <StatCard icon="⌁" tone="blue" label="最近血压" value={bpRows[0] ? `${bpRows[0].systolic_mmhg}/${bpRows[0].diastolic_mmhg}` : '暂无'} unit="" foot={bpRows[0] ? monthDay(bpRows[0].record_date) : '最近 7 条'} />
+        <StatCard icon="◷" tone="violet" label="平均睡眠" value={sleepAverage == null ? '暂无' : sleepAverage.toFixed(1)} unit={sleepAverage == null ? '' : '小时'} foot={`${sleepRows.length} 天有记录`} />
+        <StatCard icon="♡" tone="rose" label="想找人聊聊" value={`${talkDays} 天`} unit="" foot="最近 7 条" />
+        <StatCard icon="▤" tone="green" label="病历" value={`${records.length} 份`} unit="" foot={unverified ? `${unverified} 份待核对` : '都已核对'} />
       </div>
       <ItemSummary {...props} />
 
       {(bpRows.length > 0 || props.items.some((item) => item.kind === 'bp')) && <section className="panel chart-panel">
-        <div className="panel-heading"><div><h2>血压记录</h2><p>最近 7 条记录中的读数，虚线为高压 {BP_RULES.highSystolic}</p></div></div>
+        <div className="panel-heading"><div><h2>血压</h2><p>最近 7 条记录，虚线为高压 {BP_RULES.highSystolic}。只展示记录值，不作诊断。</p></div></div>
         <BloodPressureChart rows={recent} />
-        <div className="chart-legend"><span><i className="legend-dot systolic" />高压（收缩压）</span><span><i className="legend-dot diastolic" />低压（舒张压）</span><span className="chart-footnote">仅展示记录值，不作诊断</span></div>
+        <div className="chart-legend"><span><i className="legend-dot systolic" />高压</span><span><i className="legend-dot diastolic" />低压</span></div>
       </section>}
 
+      <section className="panel">
+        <div className="panel-heading"><div><h2>每天的记录</h2><p>老人自己记的，或家属代录的。</p></div></div>
+        {checkins.length ? (
+          <ul className="m-list day-list">
+            {checkins.slice(0, shown).map((row) => {
+              const values = [
+                hasBloodPressure(row) && `血压 ${row.systolic_mmhg}/${row.diastolic_mmhg}`,
+                row.sleep_hours != null && `睡眠 ${row.sleep_hours} 小时`,
+                row.mood_response && row.mood_response !== '跳过' && `心情${row.mood_response}`,
+              ].filter(Boolean)
+              return (
+                <li key={row.checkin_id} className="m-row">
+                  <div className="day-date"><strong>{monthDay(row.record_date)}</strong><span>{WEEKDAYS[new Date(`${row.record_date}T00:00:00`).getDay()]}</span></div>
+                  <div className="day-body">
+                    <p>{values.length ? values.join(' · ') : <span className="muted">没有数字记录</span>}</p>
+                    {row.self_report_note && <small>"{row.self_report_note}"</small>}
+                    <span className="day-tags">
+                      {row.wants_to_talk === '愿意' && <em className="talk">♡ 想找人聊聊</em>}
+                      {row.recorded_by_type === 'family' && <em>家属代录</em>}
+                    </span>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        ) : <InlineEmpty text="还没有每日记录。" />}
+        {shown < checkins.length && <button className="button button-soft more-button" onClick={() => setShown(shown + 7)}>看更早的记录</button>}
+      </section>
+    </>
+  )
+}
+
+function Settings(props) {
+  return (
+    <>
+      <PageHeading eyebrow="家人或医生设置" title="设置" description="改完马上生效，老人那边会同步显示。" />
+      <ReminderSettings {...props} />
       <MedList {...props} />
       <ItemSettings {...props} />
-
-      <div className="tab-row" role="tablist">
-        <button role="tab" aria-selected={tab === 'health'} className={tab === 'health' ? 'active' : ''} onClick={() => setTab('health')}>健康数据</button>
-        <button role="tab" aria-selected={tab === 'care'} className={tab === 'care' ? 'active' : ''} onClick={() => setTab('care')}>关怀动态</button>
-      </div>
-
-      {tab === 'health' ? (
-        <section className="panel data-panel">
-          {checkins.length ? (
-            <div className="table-scroll">
-              <table className="data-table">
-                <thead><tr><th>日期</th><th>血压</th><th>脉搏</th><th>睡眠</th><th>心情</th><th>记录人</th><th>状态</th></tr></thead>
-                <tbody>
-                  {checkins.map((row) => (
-                    <tr key={row.checkin_id}>
-                      <td><strong>{dateLabel(row.record_date)}</strong></td>
-                      <td>{hasBloodPressure(row) ? `${row.systolic_mmhg}/${row.diastolic_mmhg}` : <span className="muted">—</span>}</td>
-                      <td>{row.pulse_bpm ?? <span className="muted">—</span>}</td>
-                      <td>{row.sleep_hours != null ? `${row.sleep_hours} 小时` : <span className="muted">—</span>}</td>
-                      <td><MoodBadge value={row.mood_response} /></td>
-                      <td>{row.recorded_by_type === 'family' ? '家属代录' : '本人'}</td>
-                      <td><CaptureBadge value={row.capture_status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : <InlineEmpty text="还没有每日记录。" />}
-        </section>
-      ) : (
-        <section className="panel care-panel">
-          {careRows.length ? (
-            <div className="care-timeline">
-              {careRows.map((row) => (
-                <article className="timeline-card" key={row.checkin_id}>
-                  <div className="timeline-date"><strong>{new Date(`${row.record_date}T00:00:00`).getDate()}</strong><span>{shortDate(row.record_date)}</span></div>
-                  <div className="timeline-line" />
-                  <div className="timeline-content">
-                    <div className="timeline-head">
-                      <span className={`mood-pill ${row.wants_to_talk === '愿意' ? 'talk-pill' : ''}`}>{row.wants_to_talk === '愿意' ? '♡ 想找人聊聊' : row.mood_response && row.mood_response !== '跳过' ? `心情 · ${row.mood_response}` : '日常记录'}</span>
-                      <span className="timeline-by">{row.recorded_by_type === 'family' ? '家属代录' : '本人记录'}</span>
-                    </div>
-                    <p>{row.self_report_note || (row.wants_to_talk === '愿意' ? '本人表示愿意交流。' : '未填写补充说明。')}</p>
-                    {row.sleep_hours != null && <span className="timeline-detail">睡眠 {row.sleep_hours} 小时</span>}
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : <InlineEmpty text="还没有关怀内容。" />}
-        </section>
-      )}
     </>
+  )
+}
+
+// 小安主动提醒：哪些开、一天最多几条、夜里几点不打扰
+function ReminderSettings({ reminderSettings: settings, onReminderSettingsChange: onChange, reminderLog, reminderPreview, notifyStatus, onEnableNotifications, onTestNotification }) {
+  if (!settings) return null
+  const dueKeys = new Set(reminderPreview.map((item) => item.key))
+  const sentKeys = new Set(reminderLog.map((item) => item.key))
+  const toggle = (key) => onChange({ ...settings, enabled: { ...settings.enabled, [key]: settings.enabled[key] === false } })
+  const statusText = {
+    granted: '这台手机已允许通知。',
+    default: '这台手机还没允许通知，提醒只会出现在小安的对话里。',
+    denied: '通知被拒绝了，需要在浏览器设置里允许这个网站发通知。',
+    'needs-install': '苹果手机要先"添加到主屏幕"，从桌面打开后才能收到通知。',
+    unsupported: '这个浏览器不能发通知，提醒只会出现在小安的对话里。',
+  }[notifyStatus]
+
+  return (
+    <section className="panel reminder-settings">
+      <div className="panel-heading"><div><h2>小安主动提醒</h2><p>按固定规则判断，不诊断、不提用药。数值是示例，需要临床老师核对。</p></div></div>
+      <div className="notify-status">
+        <span>{statusText}</span>
+        {notifyStatus === 'default' && <button className="button button-soft" onClick={onEnableNotifications}>允许通知</button>}
+        {notifyStatus === 'granted' && <button className="button button-soft" onClick={onTestNotification}>发一条试试</button>}
+      </div>
+      <ul className="reminder-list">
+        {REMINDER_TYPES.map((type) => {
+          const due = reminderPreview.find((item) => item.key === type.key)
+          return (
+            <li key={type.key}>
+              <label>
+                <input type="checkbox" checked={settings.enabled[type.key] !== false} onChange={() => toggle(type.key)} />
+                <span><strong>{type.label}</strong><small>{type.hint}</small></span>
+              </label>
+              <em className={sentKeys.has(type.key) ? 'sent' : dueKeys.has(type.key) ? 'due' : ''}>
+                {sentKeys.has(type.key) ? '今天已提醒' : due ? '现在符合' : '现在不符合'}
+              </em>
+            </li>
+          )
+        })}
+      </ul>
+      <div className="reminder-limits">
+        <label>一天最多
+          <select value={settings.maxPerDay} onChange={(event) => onChange({ ...settings, maxPerDay: Number(event.target.value) })}>
+            {[1, 2, 3, 5].map((n) => <option key={n} value={n}>{n} 条</option>)}
+          </select>
+        </label>
+        <label>夜里不打扰
+          <span>
+            <input type="time" value={settings.quietStart} onChange={(event) => onChange({ ...settings, quietStart: event.target.value })} />
+            到
+            <input type="time" value={settings.quietEnd} onChange={(event) => onChange({ ...settings, quietEnd: event.target.value })} />
+          </span>
+        </label>
+      </div>
+      {reminderLog.length > 0 && (
+        <p className="reminder-log">今天已提醒：{reminderLog.map((item) => `${new Date(item.at).toTimeString().slice(0, 5)} ${item.title}`).join('；')}</p>
+      )}
+      <p className="reminder-note">网页开着（包括在后台）时才能提醒；完全关掉后也能提醒，需要服务器推送，还没做。休息提醒在 {REMINDER_RULES.restTime} 以后。</p>
+    </section>
   )
 }
 
@@ -250,26 +266,23 @@ function ItemSummary({ items, measurements }) {
     <section className="panel item-summary">
       <div className="panel-heading"><div><h2>其他记录项目</h2><p>最近 7 天。超出范围只是提醒，不作诊断。</p></div></div>
       {numberItems.length > 0 && (
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead><tr><th>项目</th><th>最近一次</th><th>7 天</th><th>超出范围</th></tr></thead>
-            <tbody>
-              {numberItems.map((item) => {
-                const rows = readingsFor(measurements, item.key)
-                const week = rows.filter((row) => row.record_date >= from)
-                const outside = week.filter((row) => checkValue(item, row.value_num).outOfRange).length
-                return (
-                  <tr key={item.key}>
-                    <td><strong>{item.label}</strong><small className="muted item-range">{rangeText(item)}</small></td>
-                    <td>{rows[0] ? <>{formatValue(item, rows[0].value_num)}{rows[0].value_text ? `（${rows[0].value_text}）` : ''}<small className="muted item-range">{monthDay(rows[0].record_date)}</small></> : <span className="muted">还没有</span>}</td>
-                    <td>{week.length} 次</td>
-                    <td>{outside ? <span className="dose-chip">{outside} 次</span> : '—'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ul className="m-list">
+          {numberItems.map((item) => {
+            const rows = readingsFor(measurements, item.key)
+            const week = rows.filter((row) => row.record_date >= from)
+            const outside = week.filter((row) => checkValue(item, row.value_num).outOfRange).length
+            return (
+              <li key={item.key} className="m-row">
+                <div className="m-main">
+                  <strong>{item.label}</strong>
+                  <small>{rows[0] ? `最近 ${formatValue(item, rows[0].value_num)}${rows[0].value_text ? `（${rows[0].value_text}）` : ''} · ${monthDay(rows[0].record_date)}` : '还没有记录'}</small>
+                  <small>7 天记了 {week.length} 次 · {rangeText(item)}</small>
+                </div>
+                {outside > 0 && <span className="dose-chip">{outside} 次超出</span>}
+              </li>
+            )
+          })}
+        </ul>
       )}
       <p className="symptom-summary"><strong>哪里不舒服：</strong>{symptoms.length ? symptoms.map(([symptom, days]) => `${symptom} ${days} 天`).join('、') : '最近 7 天没有记'}</p>
     </section>
@@ -302,27 +315,25 @@ function ItemSettings({ itemConfig, items, onItemsChange }) {
     <section className="panel item-settings">
       <div className="panel-heading"><div><h2>每天要记的项目</h2><p>请按医生的意见选择和填写提醒范围。睡眠、心情、哪里不舒服所有人都记，不用设置。</p></div></div>
       {items.length ? (
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead><tr><th>项目</th><th>低于多少提醒</th><th>高于多少提醒</th><th /></tr></thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.key}>
-                  <td><strong>{item.label}</strong> <small className="muted">{item.unit}</small></td>
-                  {item.kind === 'bp' ? (
-                    <td colSpan="2"><small className="muted">高压 ≥ {BP_RULES.urgentSystolic} 或低压 ≥ {BP_RULES.urgentDiastolic} 提醒复测，高压 &lt; {BP_RULES.lowSystolic} 提醒偏低（示例，待临床老师核对）</small></td>
-                  ) : (
-                    <>
-                      <td><input className="range-input" inputMode="decimal" defaultValue={item.low ?? ''} onBlur={(event) => updateRange(item.key, 'low', event.target.value)} aria-label={`${item.label}低于多少提醒`} /></td>
-                      <td><input className="range-input" inputMode="decimal" defaultValue={item.high ?? ''} onBlur={(event) => updateRange(item.key, 'high', event.target.value)} aria-label={`${item.label}高于多少提醒`} /></td>
-                    </>
-                  )}
-                  <td><button className="text-button" onClick={() => onItemsChange(itemConfig.filter((entry) => entry.key !== item.key))}>不记了</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ul className="m-list">
+          {items.map((item) => (
+            <li key={item.key} className="m-row setting-row">
+              <div className="m-main">
+                <strong>{item.label} <small>{item.unit}</small></strong>
+                {item.kind === 'bp' ? (
+                  <small>高压 ≥ {BP_RULES.urgentSystolic} 或低压 ≥ {BP_RULES.urgentDiastolic} 提醒复测，高压 &lt; {BP_RULES.lowSystolic} 提醒偏低（示例，待临床老师核对）</small>
+                ) : (
+                  <span className="range-edit">
+                    低于<input className="range-input" inputMode="decimal" defaultValue={item.low ?? ''} onBlur={(event) => updateRange(item.key, 'low', event.target.value)} aria-label={`${item.label}低于多少提醒`} />
+                    高于<input className="range-input" inputMode="decimal" defaultValue={item.high ?? ''} onBlur={(event) => updateRange(item.key, 'high', event.target.value)} aria-label={`${item.label}高于多少提醒`} />
+                    时提醒
+                  </span>
+                )}
+              </div>
+              <button className="text-button" onClick={() => onItemsChange(itemConfig.filter((entry) => entry.key !== item.key))}>不记了</button>
+            </li>
+          ))}
+        </ul>
       ) : <InlineEmpty text="除了睡眠、心情、哪里不舒服，还没有设置别的项目。" />}
       {available.length > 0 && (
         <div className="preset-row">
@@ -357,27 +368,24 @@ function MedList({ meds, slots, onMedsChange }) {
   }
   return (
     <section className="panel meds-panel">
-      <div className="panel-heading"><div><h2>用药</h2><p>请按医生处方填写；老人拍了新处方，AI 也不会自动改这里。老人"今天"页每个时间点有一个打卡按钮。</p></div></div>
+      <div className="panel-heading"><div><h2>用药</h2><p>按医生处方填写；老人拍了新处方，AI 也不会自动改这里。</p></div></div>
       {meds.length ? (
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead><tr><th>药名</th><th>每次用量</th><th>今天打卡</th><th /></tr></thead>
-            <tbody>
-              {meds.map((med) => (
-                <tr key={med.id}>
-                  <td><strong>{med.name}</strong></td>
-                  <td>{med.dose || '—'}</td>
-                  <td>
-                    {slots.filter((slot) => slot.med.id === med.id).map((slot) => (
-                      <span key={slot.id} className={`dose-chip ${slot.taken ? 'taken' : ''}`}>{slot.time} {slot.taken ? '✓ 已吃' : '未打卡'}</span>
-                    ))}
-                  </td>
-                  <td><button className="text-button" onClick={() => onMedsChange(meds.filter((item) => item.id !== med.id))}>删除</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ul className="m-list">
+          {meds.map((med) => (
+            <li key={med.id} className="m-row">
+              <div className="m-main">
+                <strong>{med.name}</strong>
+                <small>每次 {med.dose || '—'}</small>
+                <span className="day-tags">
+                  {slots.filter((slot) => slot.med.id === med.id).map((slot) => (
+                    <span key={slot.id} className={`dose-chip ${slot.taken ? 'taken' : ''}`}>{slot.time} {slot.taken ? '✓ 已吃' : '未打卡'}</span>
+                  ))}
+                </span>
+              </div>
+              <button className="text-button" onClick={() => onMedsChange(meds.filter((item) => item.id !== med.id))}>删除</button>
+            </li>
+          ))}
+        </ul>
       ) : <InlineEmpty text="还没有设置用药。" />}
         <form className="med-form" onSubmit={add}>
           <label className="field"><span>药名</span><input value={form.name} placeholder="例如：降压药（示例）" onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>

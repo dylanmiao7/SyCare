@@ -1,10 +1,11 @@
 import { hasBloodPressure, localDate, monthDay } from '../lib/format'
 import { SYMPTOM_KEY, formatValue } from '../lib/items'
+import NotifyCard from './NotifyCard'
 
 const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 
 // "我的记录"：最近 7 天，大字列表，不用图表
-export default function ElderHistory({ checkins, items, measurements, onOpenFamily }) {
+export default function ElderHistory({ checkins, items, measurements, notifyStatus, onEnableNotifications, onOpenFamily }) {
   const days = [...Array(7)].map((_, index) => localDate(-index))
 
   function linesFor(date) {
@@ -29,6 +30,7 @@ export default function ElderHistory({ checkins, items, measurements, onOpenFami
         <h1>我的记录</h1>
         <p>最近 7 天。没记的日子空着，不要紧。</p>
       </header>
+      {notifyStatus !== 'granted' && <NotifyCard status={notifyStatus} onEnable={onEnableNotifications} />}
       {days.map((date, index) => {
         const lines = linesFor(date)
         return (
